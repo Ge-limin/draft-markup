@@ -30,7 +30,7 @@ DEFAULT_MODEL = "gemini-2.5-pro"
 # ---------------------------------------------------------------- blocks
 
 def plain(md):
-    s = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1 (\2)", md)
+    s = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1", md)
     s = re.sub(r"\*\*(.+?)\*\*", r"\1", s)
     s = re.sub(r"`([^`]+)`", r"\1", s)
     return s
@@ -60,6 +60,31 @@ def versions(d):
     if not vs:
         sys.exit(f"{d}: no v1.md")
     return vs
+
+
+def apply_links(md, links):
+    """Link the first plain occurrence of each anchor in body paragraphs (links.json: [{anchors, url}])."""
+    blocks = re.split(r"(\n\s*\n)", md)
+    done = []
+    for item in links:
+        for anchor in item["anchors"]:
+            hit = False
+            for k, b in enumerate(blocks):
+                if k % 2 or b.lstrip().startswith(("#", "- ", "* ", "---")) or item["url"] in b:
+                    continue
+                for m in re.finditer(re.escape(anchor), b):
+                    before = b[:m.start()]
+                    if before.count("[") > before.count("]"):      # already inside a link
+                        continue
+                    blocks[k] = b[:m.start()] + f"[{anchor}]({item['url']})" + b[m.end():]
+                    hit = True
+                    break
+                if hit:
+                    break
+            if hit:
+                done.append(anchor)
+                break
+    return "".join(blocks), done
 
 
 # ---------------------------------------------------------------- build
@@ -188,7 +213,12 @@ def rewrite(d, marks_path, model):
         changes.append({"oldP": g, "oldText": "\n\n".join(blocks[p]["text"] for p in g),
                         "newBlocks": list(range(first, len(out_blocks))),
                         "marks": [{"quote": m["quote"], "reason": m.get("reason", "")} for m in ms]})
-    (d / f"v{v + 1}.md").write_text("\n\n".join(out_blocks) + "\n")
+    new_doc = "\n\n".join(out_blocks) + "\n"
+    links_file = d / "links.json"
+    if links_file.exists():
+        new_doc, linked = apply_links(new_doc, json.loads(links_file.read_text()))
+        print("linked:", ", ".join(linked) or "nothing")
+    (d / f"v{v + 1}.md").write_text(new_doc)
     rounds = d / "rounds"
     rounds.mkdir(exist_ok=True)
     (rounds / f"r{v}-marks.json").write_text(json.dumps(marks, ensure_ascii=False, indent=1))
