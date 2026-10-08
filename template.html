@@ -103,8 +103,8 @@
   .list-marks li { border-left: 3px solid var(--mark); padding: 2px 0 2px 10px; font-size: 13px; line-height: 1.6; }
   .list-marks li.focus { background: var(--mark-bg); }
   .list-marks .q { font-family: var(--serif); cursor: pointer; }
-  .list-marks .row { display: flex; gap: 6px; margin-top: 4px; }
-  .list-marks input { flex: 1; min-width: 0; font: inherit; font-size: 12.5px; padding: 4px 7px; border: 1px solid var(--line); border-radius: 3px; background: var(--bg); color: var(--ink); }
+  .list-marks .row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
+  .list-marks .row input:not([type]) { flex: 1; min-width: 0; font: inherit; font-size: 12.5px; padding: 4px 7px; border: 1px solid var(--line); border-radius: 3px; background: var(--bg); color: var(--ink); }
   .empty { font-size: 13px; color: var(--muted); line-height: 1.7; }
   button { font-family: var(--sans); cursor: pointer; }
   .btn { font-size: 14px; padding: 8px 14px; border-radius: 4px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
@@ -122,7 +122,9 @@
   }
   .selbar .inner { max-width: 1240px; margin-inline: auto; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   .selbar .q { flex: 1 1 100%; font-family: var(--serif); font-size: 14px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .selbar input { flex: 1 1 220px; min-width: 0; font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--ink); }
+  .verb { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; white-space: nowrap; }
+  .verb input { accent-color: var(--mark); width: 15px; height: 15px; flex: none; }
+  .selbar input:not([type]) { flex: 1 1 220px; min-width: 0; font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--ink); }
 </style>
 
 <div class="wrap">
@@ -147,7 +149,7 @@
         <div class="cmp" id="cmp"></div>
       </section>
       <div class="paper" id="paper">
-        <p class="hint">用鼠标或手指选中不喜欢的句子或词，屏幕底部会出现「划掉」按钮，可以顺手写一句原因（不写也行）。点划过的地方可以在右侧撤销或改原因。划完点「全部提交」。</p>
+        <p class="hint">选中不喜欢的句子或词，屏幕底部会出现「划掉」按钮，可以写一句原因（不写也行）。批注里直接写要换成的话，或者写「删」，会一字不改地照办；写原因的交给 Gemini 改写。划完点「全部提交」。</p>
         <article id="article"></article>
       </div>
     </main>
@@ -166,7 +168,7 @@
 <div class="selbar" id="selbar" hidden>
   <div class="inner">
     <div class="q" id="selQuote"></div>
-    <input id="selReason" placeholder="原因（可不写）：比如 太像 AI、太书面、不像我会说的话">
+    <input id="selReason" placeholder="批注（可不写）：原因，或者直接写要换成的话；写「删」就是删掉">
     <button type="button" class="btn danger" id="selMark">划掉</button>
     <button type="button" class="btn" id="selCancel">取消</button>
   </div>
@@ -223,7 +225,7 @@
     sorted.forEach((m) => {
       const li = document.createElement("li");
       li.className = m.id === focusId ? "focus" : "";
-      li.innerHTML = `<div class="q"></div><div class="row"><input aria-label="原因" placeholder="原因（可不写）"><button type="button" class="btn small">撤销</button></div>`;
+      li.innerHTML = `<div class="q"></div><div class="row"><input aria-label="批注" placeholder="原因，或者直接写要换成的话"><button type="button" class="btn small">撤销</button></div>`;
       li.querySelector(".q").textContent = "「" + m.quote + "」";
       li.querySelector(".q").addEventListener("click", () => focusMark(m.id, true));
       const inp = li.querySelector("input");
@@ -400,7 +402,7 @@
       const oldHtml = paint(oldText, [{ flags: del, cls: "del" }, { flags: struck, cls: "struck" }]);
       const newHtml = newText ? paint(newText, [{ flags: ins, cls: "ins" }]) : `<span class="gone">（整段删掉了）</span>`;
       row.innerHTML = `<div class="side old">${oldHtml}</div><div class="side new">${newHtml}</div>` +
-        (r.c.marks.length ? `<div class="why">你划掉的：${r.c.marks.map((m) => "<b>「" + esc(m.quote) + "」</b>" + (m.reason ? "：" + esc(m.reason) : "")).join("；")}</div>` : "");
+        (r.c.marks.length ? `<div class="why">你划掉的：${r.c.marks.map((m) => "<b>「" + esc(m.quote) + "」</b>" + ("replace" in m ? (m.replace ? " → 原样改为「" + esc(m.replace) + "」" : " → 删掉") : (m.reason ? "：" + esc(m.reason) : ""))).join("；")}</div>` : "");
       box.append(row);
     });
   }

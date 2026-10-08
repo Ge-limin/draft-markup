@@ -50,6 +50,29 @@ def link_spans(md):
     return "".join(out), spans
 
 
+def plain_to_md(md):
+    """index[k] = position in md of plain-text character k (links, ** and ` stripped)."""
+    index, pos = [], 0
+    pat = re.compile(r"\[([^\]]+)\]\(([^)]+)\)|\*\*(.+?)\*\*|`([^`]+)`")
+    for m in pat.finditer(md):
+        index += range(pos, m.start())
+        g = 1 if m.group(1) is not None else 3 if m.group(3) is not None else 4
+        index += range(m.start(g), m.end(g))
+        pos = m.end()
+    index += range(pos, len(md))
+    return index
+
+
+def apply_verbatim(md, text_offset, edits):
+    """Apply [(start, end, replacement)] given in the block's plain-text offsets, right to left."""
+    idx = plain_to_md(md)
+    idx.append(len(md))
+    for start, end, new in sorted(edits, reverse=True):
+        a, b = idx[text_offset + start], idx[text_offset + end - 1] + 1 if end > start else idx[text_offset + start]
+        md = md[:a] + new + md[b:]
+    return md
+
+
 def split_blocks(md):
     blocks = []
     chunks = []
@@ -102,7 +125,9 @@ def apply_links(md, links):
                     before = b[:m.start()]
                     if before.count("[") > before.count("]"):      # already inside a link
                         continue
-                    blocks[k] = b[:m.start()] + f"[{anchor}]({item['url']})" + b[m.end():]
+                    label = item.get("label", anchor)
+                    i0 = m.start() + anchor.index(label)
+                    blocks[k] = b[:i0] + f"[{label}]({item['url']})" + b[i0 + len(label):]
                     hit = True
                     break
                 if hit:
@@ -153,15 +178,51 @@ def load_marks(path, v):
     return [m for m in docs if int(m.get("v", 0)) == v]
 
 
-def gemini(model, prompt):
+def gemini(model, prompt, as_json=False):
     req = urllib.request.Request(
         f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
         data=json.dumps({"contents": [{"role": "user", "parts": [{"text": prompt}]}],
-                         "generationConfig": {"temperature": 0.8}}).encode(),
+                         "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json"} if as_json
+                         else {"temperature": 0.8}}).encode(),
         headers={"Content-Type": "application/json", "x-goog-api-key": os.environ["GEMINI_API_KEY"]})
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({"https": "http://127.0.0.1:7890"}))
     d = json.load(opener.open(req, timeout=600))
     return "".join(p.get("text", "") for p in d["candidates"][0]["content"]["parts"] if not p.get("thought")).strip()
+
+
+CLASSIFY = """作者在一篇文章上划掉了一些文字，并在每处写了批注。请判断每条批注属于哪一类：
+- replace：批注本身就是要换上去的文字（作者想要的新说法，可能带引号，也可能不带），应该原样替换被划掉的部分。
+- delete：批注的意思是删掉被划的部分（比如「删」「删掉」「不要」）。
+- comment：批注是意见、疑问或要求（比如「太像 AI」「什么东西？」「书面一点」），需要改写而不是原样替换。
+拿不准时选 comment。replace 的 text 填要换上去的文字，去掉作者为了标示而加的外层引号；delete 和 comment 的 text 留空。
+
+只输出 JSON 数组，每项 {{"id": ..., "kind": "replace"|"delete"|"comment", "text": ...}}，不要别的内容。
+
+{items}
+"""
+
+
+def classify(marks, blocks, model):
+    """Decide for each annotated mark whether its note is replacement text, a deletion, or a comment."""
+    todo = [m for m in marks if "replace" not in m and m.get("reason", "").strip()]
+    if not todo:
+        return
+    items = "\n\n".join(
+        f"id: {m['id']}\n所在段落：{blocks[int(m['p'])]['text']}\n被划掉的：「{m['quote']}」\n批注：{m['reason']}" for m in todo)
+    try:
+        result = json.loads(gemini(model, CLASSIFY.format(items=items), as_json=True))
+    except (json.JSONDecodeError, KeyError) as e:
+        print(f"classification failed ({e}); every note is treated as a comment")
+        return
+    kinds = {r["id"]: r for r in result if isinstance(r, dict) and "id" in r}
+    for m in todo:
+        r = kinds.get(m["id"], {"kind": "comment"})
+        if r["kind"] == "replace" and r.get("text", "").strip():
+            m["replace"] = r["text"].strip()
+        elif r["kind"] == "delete":
+            m["replace"] = ""
+        label = {"replace": f"替换为「{m.get('replace', '')}」", "delete": "删掉"}.get(r["kind"], "意见，交给改写")
+        print(f"  [{label}] 「{m['quote'][:24]}」 批注：{m['reason'][:40]}")
 
 
 PROMPT = """{brief}
@@ -198,9 +259,32 @@ def rewrite(d, marks_path, model):
     marks = load_marks(marks_path, v)
     if not marks:
         sys.exit(f"no marks for version {v}")
+    overrides_file = d / "rounds" / f"r{v}-overrides.json"
+    overrides = json.loads(overrides_file.read_text()) if overrides_file.exists() else {}
+    for m in marks:            # Claude's corrections to the automatic classification, by mark id
+        if m["id"] in overrides:
+            o = overrides[m["id"]]
+            if o is None:
+                m.pop("replace", None)
+                m["reviewed"] = True
+            else:
+                m["replace"] = o
+    print("notes:")
+    classify([m for m in marks if not m.get("reviewed")], blocks, model)
+    # the author's own wording is used as written
+    verbatim = [m for m in marks if "replace" in m]
+    for p in {int(m["p"]) for m in verbatim}:
+        b = blocks[p]
+        head = len(b["md"]) - len(b["md"].lstrip("#").lstrip()) if b["kind"].startswith("h") else 0
+        body = b["md"][head:]
+        edits = [(m["start"], m["end"], m["replace"]) for m in verbatim if int(m["p"]) == p]
+        b["md"] = b["md"][:head] + apply_verbatim(body, 0, edits)
+        b["text"], _ = link_spans(b["md"][head:])
+    md = "\n\n".join(b["md"] for b in blocks)
     by_p = {}
     for m in marks:
-        by_p.setdefault(int(m["p"]), []).append(m)
+        if "replace" not in m:
+            by_p.setdefault(int(m["p"]), []).append(m)
     brief = (d / "brief.md").read_text()
 
     # neighbouring struck blocks are rewritten together so the result reads as one passage
@@ -214,6 +298,9 @@ def rewrite(d, marks_path, model):
     def one(g):
         ms = sorted((m for p in g for m in by_p[p]), key=lambda m: (int(m["p"]), m["start"]))
         lines = "\n".join(f"- 「{m['quote']}」" + (f"　原因：{m['reason']}" if m.get("reason") else "") for m in ms)
+        own = [m["replace"] for p in g for m in verbatim if int(m["p"]) == p and m["replace"]]
+        if own:
+            lines += "\n\n下面这些是作者亲手写进这几段的文字，必须一字不改地保留：\n" + "\n".join(f"- 「{t}」" for t in own)
         block = "\n\n".join(blocks[p]["md"] for p in g)
         what = "这一段" if len(g) == 1 else f"这连续的 {len(g)} 段（可以合并、拆分或删减段落）"
         out = gemini(model, PROMPT.replace("这一段", what).format(brief=brief, article=md, block=block, marks=lines))
@@ -224,10 +311,16 @@ def rewrite(d, marks_path, model):
         results = {g0: (text, ms) for g0, text, ms in ex.map(one, groups)}
     group_of = {p: g for g in groups for p in g}
 
+    old_blocks = split_blocks((d / f"v{v}.md").read_text())
+    verbatim_ps = {int(m["p"]) for m in verbatim}
     out_blocks, changes = [], []
     for b in blocks:
         g = group_of.get(b["p"])
         if g is None:
+            if b["p"] in verbatim_ps:
+                changes.append({"oldP": [b["p"]], "oldText": old_blocks[b["p"]]["text"], "newBlocks": [len(out_blocks)],
+                                "marks": [{"quote": m["quote"], "reason": m.get("reason", ""), "replace": m["replace"]}
+                                          for m in verbatim if int(m["p"]) == b["p"]]})
             out_blocks.append(b["md"])
             continue
         if b["p"] != g[0]:
@@ -236,9 +329,11 @@ def rewrite(d, marks_path, model):
         first = len(out_blocks)
         pieces = split_blocks(text) if text else []
         out_blocks.extend(x["md"] for x in pieces)
-        changes.append({"oldP": g, "oldText": "\n\n".join(blocks[p]["text"] for p in g),
+        changes.append({"oldP": g, "oldText": "\n\n".join(old_blocks[p]["text"] for p in g),
                         "newBlocks": list(range(first, len(out_blocks))),
-                        "marks": [{"quote": m["quote"], "reason": m.get("reason", "")} for m in ms]})
+                        "marks": [{"quote": m["quote"], "reason": m.get("reason", "")} for m in ms]
+                                 + [{"quote": m["quote"], "reason": m.get("reason", ""), "replace": m["replace"]}
+                                    for p in g for m in verbatim if int(m["p"]) == p]})
     new_doc = "\n\n".join(x["md"] for x in split_blocks("\n\n".join(out_blocks))) + "\n"
     links_file = d / "links.json"
     if links_file.exists():
@@ -252,7 +347,10 @@ def rewrite(d, marks_path, model):
     with open(d / "划线记录.md", "a") as f:
         f.write(f"\n## 第 {v} 版 → 第 {v + 1} 版（{date.today()}，{model}）\n\n")
         for m in sorted(marks, key=lambda m: (int(m["p"]), m["start"])):
-            f.write(f"- 「{m['quote']}」" + (f"——{m['reason']}" if m.get("reason") else "") + "\n")
+            if "replace" in m:
+                f.write(f"- 「{m['quote']}」→ 原样改为「{m['replace']}」" + ("（删掉）" if not m["replace"] else "") + "\n")
+            else:
+                f.write(f"- 「{m['quote']}」" + (f"——{m['reason']}" if m.get("reason") else "") + "\n")
     print(f"v{v + 1}.md: rewrote {len(changes)} blocks from {len(marks)} marks with {model}")
 
 

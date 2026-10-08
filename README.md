@@ -12,14 +12,25 @@ article's `划线记录.md`, which is the raw material for the vault's 否决词
 1. `python3 markup.py build <article-dir>` writes `page.html` for the current version.
 2. Claude publishes `page.html` as a claude.ai Artifact with `capabilities: {db: {}}` and saves
    its URL in `meta.json` (`artifact_url`). Later rounds republish to the same URL.
-3. The author selects text, presses 划掉 (optionally with a reason), and finally 全部提交.
+3. The author selects text, presses 划掉 with an optional note (a reason, the words to use instead, or 「删」), and finally 全部提交.
    Marks are stored in the artifact's database (`marks/<id>`), the submission in `state/submitted`.
 4. Claude reads the marks (`ArtifactData list marks` with `out_dir`) and runs
    `zsh -ic 'python3 markup.py rewrite <article-dir> <out_dir>'`.
-   Each struck paragraph goes to Gemini (default `gemini-2.5-pro`) with the article's
-   `brief.md`, the whole article for context, and the struck phrases with reasons. Unmarked
-   paragraphs are not touched. The result is `v<N+1>.md` plus `rounds/r<N>-marks.json` and
-   `rounds/r<N>-changes.json`.
+   - **The author's own words are used as written.** Gemini first sorts every note into
+     replacement text, a deletion (「删」), or a comment, and prints the result. Replacements
+     and deletions are applied verbatim, with no rewriting; the author never has to say which
+     kind a note is. Claude checks the printed list each round and corrects a wrong call with
+     `rounds/r<N>-overrides.json` (`{"<mark id>": "replacement text" | "" | null}`, where `""`
+     deletes and `null` makes it a comment).
+   - Paragraphs struck with comments go to Gemini (default `gemini-2.5-pro`) with the
+     article's `brief.md`, the whole article for context, the struck phrases with their notes,
+     and any replacement text in those paragraphs, which it must keep word for word.
+     Neighbouring struck paragraphs are rewritten together. Unmarked paragraphs are not touched.
+   - `links.json` (`[{anchors, url, label?}]`) links the first plain occurrence of each anchor
+     afterwards, so URLs come from a checked list.
+   - The result is `v<N+1>.md` plus `rounds/r<N>-marks.json` and `rounds/r<N>-changes.json`.
+   - Claude then checks only the facts in the rewritten paragraphs, never the style, and lists
+     what it corrected.
 5. Back to step 1.
 
 ## Article directory
@@ -27,6 +38,7 @@ article's `划线记录.md`, which is the raw material for the vault's 否决词
 | File | Content |
 |---|---|
 | `meta.json` | `key` (stable id), `title` (page title), `artifact_url`, optional `v1_model` |
+| `links.json` | Checked links: anchors in the text and their URLs |
 | `brief.md` | Voice samples, banned words and the fact list Gemini must stay within |
 | `v1.md`, `v2.md`, … | Versions; the highest number is current |
 | `rounds/` | What was struck on each version and what changed |
