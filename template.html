@@ -7,6 +7,7 @@
     --bg: #eef1f2; --surface: #ffffff; --ink: #1c2226; --muted: #5d6a71; --line: #d5dcdf;
     --accent: #2b5d8a; --accent-soft: #dce8f2;
     --mark: #c2410c; --mark-bg: #fde4d4; --changed: #e7f1e9; --changed-line: #3f8a5a;
+    --del-bg: #fff5f5; --del-strong: #ffc9c9; --ins-bg: #f2fbf4; --ins-strong: #b9eac6;
     --serif: "Noto Serif SC", "Songti SC", "STSong", serif;
     --sans: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", sans-serif;
     --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
@@ -16,12 +17,14 @@
       color-scheme: dark;
       --bg: #14181b; --surface: #1b2125; --ink: #e3e8ea; --muted: #94a2a9; --line: #2e373c;
       --accent: #80b1dc; --accent-soft: #22313d; --mark: #f29a64; --mark-bg: #4a2a1b; --changed: #1f3227; --changed-line: #6cc08d;
+      --del-bg: #2a1c1d; --del-strong: #6b2d31; --ins-bg: #17271d; --ins-strong: #245c37;
     }
   }
   :root[data-theme="dark"] {
     color-scheme: dark;
     --bg: #14181b; --surface: #1b2125; --ink: #e3e8ea; --muted: #94a2a9; --line: #2e373c;
     --accent: #80b1dc; --accent-soft: #22313d; --mark: #f29a64; --mark-bg: #4a2a1b; --changed: #1f3227; --changed-line: #6cc08d;
+      --del-bg: #2a1c1d; --del-strong: #6b2d31; --ins-bg: #17271d; --ins-strong: #245c37;
   }
   body { background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 14px; }
   .wrap { padding-inline: 16px; padding-block: 0 140px; max-width: 1240px; margin-inline: auto; }
@@ -49,10 +52,46 @@
   article .list { font-size: 15.5px; }
   .mk { background: var(--mark-bg); text-decoration: line-through; text-decoration-color: var(--mark); text-decoration-thickness: 1.5px; cursor: pointer; border-radius: 2px; }
   .mk.focus { outline: 2px solid var(--mark); outline-offset: 1px; }
-  .changed .blk.was-changed { background: var(--changed); box-shadow: -10px 0 0 var(--changed), 10px 0 0 var(--changed); border-left: 3px solid var(--changed-line); padding-left: 8px; margin-left: -11px; }
-  .old { display: none; }
-  .changed .old { display: block; font-family: var(--sans); font-size: 13px; line-height: 1.7; color: var(--muted); margin: -0.6em 0 1.2em; padding: 8px 12px; border: 1px dashed var(--line); border-radius: 4px; white-space: pre-wrap; }
-  .old b { color: var(--mark); font-weight: 500; }
+  article .blk.was-changed { border-left: 3px solid var(--changed-line); padding-left: 10px; margin-left: -13px; }
+
+  .tabs { display: inline-flex; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
+  .tabs button { font-size: 13px; padding: 6px 14px; border: 0; background: var(--surface); color: var(--muted); }
+  .tabs button + button { border-left: 1px solid var(--line); }
+  .tabs button[aria-selected="true"] { background: var(--accent); color: var(--surface); }
+  .tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+  .cmp { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .cmp-head, .cmp-row { display: grid; grid-template-columns: 1fr 1fr; }
+  .cmp-head div { font-size: 12.5px; font-weight: 500; color: var(--muted); padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--bg); }
+  .cmp-head div + div, .cmp-row .side + .side { border-left: 1px solid var(--line); }
+  .cmp-row { border-bottom: 1px solid var(--line); }
+  .cmp-row:last-child { border-bottom: 0; }
+  .side { font-family: var(--serif); font-size: 15.5px; line-height: 1.9; padding: 12px 16px; white-space: pre-wrap; min-width: 0; overflow-wrap: anywhere; }
+  .side .para + .para { margin-top: 0.8em; }
+  .side.old { background: var(--del-bg); }
+  .side.new { background: var(--ins-bg); }
+  .side .h { font-weight: 600; }
+  .side .gone { color: var(--muted); font-family: var(--sans); font-size: 13px; font-style: italic; }
+  .del { background: var(--del-strong); border-radius: 2px; }
+  .ins { background: var(--ins-strong); border-radius: 2px; }
+  .struck { text-decoration: line-through; text-decoration-color: var(--mark); text-decoration-thickness: 2px; }
+  .why { grid-column: 1 / -1; font-family: var(--sans); font-size: 12.5px; color: var(--muted); padding: 8px 16px; border-top: 1px dashed var(--line); line-height: 1.7; }
+  .why b { color: var(--mark); font-weight: 500; }
+  .fold { grid-column: 1 / -1; text-align: center; }
+  .fold button { width: 100%; border: 0; background: var(--bg); color: var(--muted); font-size: 12.5px; padding: 7px; }
+  .fold button:hover { color: var(--accent); }
+  .same .side { color: var(--muted); font-size: 14.5px; }
+  .cmp-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12.5px; color: var(--muted); margin: 0 0 12px; }
+  .cmp-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .cmp-legend i { display: inline-block; width: 22px; height: 12px; border-radius: 2px; }
+  @media (max-width: 760px) {
+    .cmp-head { display: none; }
+    .cmp-row { grid-template-columns: 1fr; }
+    .cmp-row .side + .side { border-left: 0; border-top: 1px solid var(--line); }
+    .side::before { display: block; font-family: var(--sans); font-size: 11.5px; color: var(--muted); margin-bottom: 4px; }
+    .side.old::before { content: "上一版"; }
+    .side.new::before { content: "这一版"; }
+  }
 
   aside { align-self: start; }
   @media (min-width: 1000px) { aside { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 60px); max-height: calc(100vh - 80px); overflow: auto; } }
@@ -90,11 +129,22 @@
     <h1 id="title"></h1>
     <span class="ver" id="ver"></span>
     <span class="spacer"></span>
-    <label class="switch" for="showChanges" id="changesSwitch"><input type="checkbox" id="showChanges"> 显示上一轮改动</label>
+    <div class="tabs" role="tablist" id="tabs">
+      <button type="button" role="tab" id="tabMark" aria-selected="true">划线</button>
+      <button type="button" role="tab" id="tabCmp" aria-selected="false">对比上一版</button>
+    </div>
   </header>
 
   <div class="layout">
     <main>
+      <section id="cmpView" hidden>
+        <div class="cmp-legend" aria-hidden="true">
+          <span><i style="background:var(--del-strong)"></i>上一版里删掉的字</span>
+          <span><i style="background:var(--ins-strong)"></i>这一版新写的字</span>
+          <span><i style="border-bottom:2px solid var(--mark)"></i>你划掉的地方</span>
+        </div>
+        <div class="cmp" id="cmp"></div>
+      </section>
       <div class="paper" id="paper">
         <p class="hint">用鼠标或手指选中不喜欢的句子或词，屏幕底部会出现「划掉」按钮，可以顺手写一句原因（不写也行）。点划过的地方可以在右侧撤销或改原因。划完点「全部提交」。</p>
         <article id="article"></article>
@@ -133,15 +183,13 @@
 
   $("title").textContent = DATA.title;
   $("ver").textContent = `第 ${V} 版${DATA.model ? " · " + DATA.model : ""}`;
-  if (!DATA.changes.length) $("changesSwitch").hidden = true;
+  if (!DATA.prevBlocks.length) $("tabs").hidden = true;
 
   function esc(s) { return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]); }
 
   function renderArticle() {
     const art = $("article");
     art.innerHTML = "";
-    const changedOld = {};
-    DATA.changes.forEach((c) => c.newBlocks.forEach((p, i) => { if (i === 0) changedOld[p] = c; }));
     const changedSet = new Set(DATA.changes.flatMap((c) => c.newBlocks));
     DATA.blocks.forEach((b) => {
       const el = document.createElement("div");
@@ -159,13 +207,6 @@
       html += esc(b.text.slice(pos));
       el.innerHTML = html;
       art.append(el);
-      if (changedOld[b.p]) {
-        const o = document.createElement("div");
-        o.className = "old";
-        const c = changedOld[b.p];
-        o.innerHTML = `上一版：${esc(c.oldText)}${c.marks.length ? "<br>你划掉的：" + c.marks.map((m) => "<b>" + esc(m.quote) + "</b>" + (m.reason ? "（" + esc(m.reason) + "）" : "")).join("；") : ""}`;
-        art.append(o);
-      }
     });
   }
 
@@ -211,7 +252,7 @@
     if (!sel || sel.isCollapsed || !sel.rangeCount) return null;
     const range = sel.getRangeAt(0);
     const art = $("article");
-    if (!art.contains(range.commonAncestorContainer)) return null;
+    if ($("paper").hidden || !art.contains(range.commonAncestorContainer)) return null;
     const parts = [];
     art.querySelectorAll(".blk").forEach((el) => {
       if (!range.intersectsNode(el) || el.classList.contains("hr")) return;
@@ -273,8 +314,101 @@
     const mk = e.target.closest(".mk");
     if (mk && window.getSelection()?.isCollapsed) focusMark(mk.dataset.id, false);
   });
-  $("showChanges").addEventListener("change", () => { $("paper").classList.toggle("changed", $("showChanges").checked); ls.set("markup:showChanges", $("showChanges").checked ? "1" : "0"); });
-  if (ls.get("markup:showChanges") !== "0" && DATA.changes.length) { $("showChanges").checked = true; $("paper").classList.add("changed"); }
+  // ---------- side-by-side comparison with the previous version
+  function tokens(t) { return t.match(/[A-Za-z0-9.+\-]+|\s+|[\s\S]/g) || []; }
+  function diff(a, b) {            // token LCS -> flags of changed chars on each side
+    const A = tokens(a), B = tokens(b), n = A.length, m = B.length;
+    const L = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+    for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--)
+      L[i][j] = A[i] === B[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+    const del = [], ins = [];
+    let i = 0, j = 0;
+    while (i < n || j < m) {
+      if (i < n && j < m && A[i] === B[j]) { for (const _ of A[i]) { del.push(0); } for (const _ of B[j]) { ins.push(0); } i++; j++; }
+      else if (j < m && (i === n || L[i][j + 1] >= L[i + 1][j])) { for (const _ of B[j]) ins.push(1); j++; }
+      else { for (const _ of A[i]) del.push(1); i++; }
+    }
+    return { del, ins };
+  }
+  function paint(text, layers) {   // layers: [{flags, cls}] -> html with runs of identical flags
+    const chars = [...text];
+    let html = "", run = "", key = "";
+    const flush = () => { if (!run) return; const cls = key.split(" ").filter(Boolean).join(" "); html += cls ? `<span class="${cls}">${esc(run)}</span>` : esc(run); run = ""; };
+    chars.forEach((ch, k) => {
+      const kk = layers.filter((l) => l.flags[k]).map((l) => l.cls).join(" ");
+      if (kk !== key) { flush(); key = kk; }
+      run += ch;
+    });
+    flush();
+    return html;
+  }
+  function struckFlags(text, quotes) {
+    const f = new Array([...text].length).fill(0);
+    quotes.forEach((q) => {
+      const at = text.indexOf(q);
+      if (at < 0) return;
+      const s0 = [...text.slice(0, at)].length, len = [...q].length;
+      for (let k = s0; k < s0 + len; k++) f[k] = 1;
+    });
+    return f;
+  }
+  function blockHtml(b, inner) { return `<div class="para${b.kind.startsWith("h") ? " h" : ""}">${inner}</div>`; }
+
+  function renderCompare() {
+    const box = $("cmp");
+    box.innerHTML = `<div class="cmp-head"><div>上一版（第 ${V - 1} 版）</div><div>这一版（第 ${V} 版）</div></div>`;
+    const prev = DATA.prevBlocks, cur = DATA.blocks;
+    const chs = [...DATA.changes].sort((x, y) => x.oldP[0] - y.oldP[0]);
+    const rows = [];
+    let i = 0, j = 0;
+    const same = () => { const r = { same: [] }; rows.push(r); return r; };
+    let bucket = null;
+    const pushSame = (a, b) => { if (!bucket) bucket = same(); bucket.same.push([a, b]); };
+    chs.forEach((c) => {
+      while (i < c.oldP[0]) { pushSame(prev[i], cur[j]); i++; j++; }
+      bucket = null;
+      rows.push({ c, old: c.oldP.map((p) => prev[p]), neu: c.newBlocks.map((p) => cur[p]) });
+      i = c.oldP[c.oldP.length - 1] + 1;
+      j = c.newBlocks.length ? c.newBlocks[c.newBlocks.length - 1] + 1 : j;
+    });
+    while (i < prev.length || j < cur.length) { pushSame(prev[i], cur[j]); i++; j++; }
+
+    rows.forEach((r) => {
+      if (r.same) {
+        const real = r.same.filter(([a, b]) => (a && a.kind !== "hr") || (b && b.kind !== "hr"));
+        if (!real.length) return;
+        const wrap = document.createElement("div");
+        wrap.className = "cmp-row same";
+        wrap.innerHTML = `<div class="fold"><button type="button">… ${real.length} 段没有改动，点开查看 …</button></div>`;
+        wrap.querySelector("button").addEventListener("click", () => {
+          wrap.innerHTML = `<div class="side old">${real.map(([a]) => a ? blockHtml(a, esc(a.text)) : "").join("")}</div><div class="side new">${real.map(([, b]) => b ? blockHtml(b, esc(b.text)) : "").join("")}</div>`;
+        });
+        box.append(wrap);
+        return;
+      }
+      const oldText = r.old.map((b) => b.text).join("\n\n"), newText = r.neu.map((b) => b.text).join("\n\n");
+      const { del, ins } = diff(oldText, newText);
+      const struck = struckFlags(oldText, r.c.marks.map((m) => m.quote));
+      const row = document.createElement("div");
+      row.className = "cmp-row";
+      const oldHtml = paint(oldText, [{ flags: del, cls: "del" }, { flags: struck, cls: "struck" }]);
+      const newHtml = newText ? paint(newText, [{ flags: ins, cls: "ins" }]) : `<span class="gone">（整段删掉了）</span>`;
+      row.innerHTML = `<div class="side old">${oldHtml}</div><div class="side new">${newHtml}</div>` +
+        (r.c.marks.length ? `<div class="why">你划掉的：${r.c.marks.map((m) => "<b>「" + esc(m.quote) + "」</b>" + (m.reason ? "：" + esc(m.reason) : "")).join("；")}</div>` : "");
+      box.append(row);
+    });
+  }
+
+  function setTab(cmp) {
+    $("tabMark").setAttribute("aria-selected", String(!cmp));
+    $("tabCmp").setAttribute("aria-selected", String(cmp));
+    $("cmpView").hidden = !cmp;
+    $("paper").hidden = cmp;
+    if (cmp) { renderCompare(); $("selbar").hidden = true; }
+    ls.set("markup:tab", cmp ? "cmp" : "mark");
+  }
+  $("tabMark").addEventListener("click", () => setTab(false));
+  $("tabCmp").addEventListener("click", () => setTab(true));
 
   $("submit").addEventListener("click", async () => {
     if (!marks.length) { $("status").textContent = "还没有划线，先选中不喜欢的句子。"; return; }
@@ -292,6 +426,7 @@
 
   try { marks = (JSON.parse(ls.get(LSKEY) || "[]") || []).filter((m) => m.v === V); } catch { marks = []; }
   render();
+  if (DATA.prevBlocks.length) setTab(ls.get("markup:tab") !== "mark");
 
   (async () => {
     db = window.claude?.use ? await window.claude.use("db") : null;

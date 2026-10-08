@@ -70,9 +70,13 @@ def build(d):
     blocks = split_blocks((d / f"v{v}.md").read_text())
     changes_file = d / "rounds" / f"r{v - 1}-changes.json"
     changes = json.loads(changes_file.read_text()) if changes_file.exists() else {"model": meta.get("v1_model", ""), "changes": []}
+    prev = split_blocks((d / f"v{v - 1}.md").read_text()) if v > 1 else []
+    for c in changes["changes"]:
+        c["oldP"] = c["oldP"] if isinstance(c["oldP"], list) else [c["oldP"]]
     data = {
         "key": meta["key"], "title": meta["title"], "version": v, "model": changes.get("model", ""),
         "blocks": [{k: b[k] for k in ("p", "kind", "text")} for b in blocks],
+        "prevBlocks": [{k: b[k] for k in ("p", "kind", "text")} for b in prev],
         "changes": changes["changes"],
     }
     page = (HERE / "template.html").read_text()
