@@ -50,6 +50,7 @@
   article .h3 { font-size: 17px; font-weight: 600; margin-top: 24px; }
   article .hr { border-top: 1px solid var(--line); height: 0; margin: 28px 0; }
   article .list { font-size: 15.5px; }
+  .lnk { color: var(--accent); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
   .mk { background: var(--mark-bg); text-decoration: line-through; text-decoration-color: var(--mark); text-decoration-thickness: 1.5px; cursor: pointer; border-radius: 2px; }
   .mk.focus { outline: 2px solid var(--mark); outline-offset: 1px; }
   article .blk.was-changed { border-left: 3px solid var(--changed-line); padding-left: 10px; margin-left: -13px; }
@@ -196,15 +197,20 @@
       el.className = `blk ${b.kind}` + (changedSet.has(b.p) ? " was-changed" : "");
       el.dataset.p = b.p;
       if (b.kind === "hr") { art.append(el); return; }
-      const ms = marks.filter((m) => m.p === b.p).sort((a, c) => a.start - c.start);
-      let html = "", pos = 0;
-      ms.forEach((m) => {
-        const s = Math.max(m.start, pos), e = Math.max(m.end, s);
-        html += esc(b.text.slice(pos, s));
-        if (e > s) html += `<span class="mk${m.id === focusId ? " focus" : ""}" data-id="${m.id}">${esc(b.text.slice(s, e))}</span>`;
-        pos = Math.max(pos, e);
-      });
-      html += esc(b.text.slice(pos));
+      // per character: which mark (if any) and which link (if any) covers it, then emit runs
+      const n = b.text.length, mk = new Array(n).fill(null), ln = new Array(n).fill(null);
+      marks.filter((m) => m.p === b.p).forEach((m) => { for (let k = m.start; k < Math.min(m.end, n); k++) mk[k] = m.id; });
+      (b.links || []).forEach(([s0, e0, url]) => { for (let k = s0; k < Math.min(e0, n); k++) ln[k] = url; });
+      let html = "", k = 0;
+      while (k < n) {
+        let e = k + 1;
+        while (e < n && mk[e] === mk[k] && ln[e] === ln[k]) e++;
+        let piece = esc(b.text.slice(k, e));
+        if (ln[k]) piece = `<span class="lnk" title="${esc(ln[k])}">${piece}</span>`;
+        if (mk[k]) piece = `<span class="mk${mk[k] === focusId ? " focus" : ""}" data-id="${mk[k]}">${piece}</span>`;
+        html += piece;
+        k = e;
+      }
       el.innerHTML = html;
       art.append(el);
     });

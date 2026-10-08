@@ -36,9 +36,31 @@ def plain(md):
     return s
 
 
+def link_spans(md):
+    """Plain text of a block plus the [start, end, url] of each link in that text."""
+    spans, out, pos = [], [], 0
+    for m in re.finditer(r"\[([^\]]+)\]\(([^)]+)\)", md):
+        out.append(plain(md[pos:m.start()]))
+        start = sum(len(x) for x in out)
+        label = plain(m.group(1))
+        out.append(label)
+        spans.append([start, start + len(label), m.group(2)])
+        pos = m.end()
+    out.append(plain(md[pos:]))
+    return "".join(out), spans
+
+
 def split_blocks(md):
     blocks = []
+    chunks = []
     for raw in re.split(r"\n\s*\n", md.strip()):
+        # a heading line followed directly by text is two blocks
+        if raw.lstrip().startswith("#") and "\n" in raw.strip():
+            head, rest = raw.strip().split("\n", 1)
+            chunks += [head, rest]
+        else:
+            chunks.append(raw)
+    for raw in chunks:
         raw = raw.strip("\n")
         if not raw.strip():
             continue
@@ -51,7 +73,11 @@ def split_blocks(md):
             kind, text = "list", plain(raw)
         else:
             kind, text = "p", plain(raw)
-        blocks.append({"p": len(blocks), "kind": kind, "md": raw, "text": text})
+        if kind != "hr":
+            text, links = link_spans(m.group(2) if m else raw)
+        else:
+            links = []
+        blocks.append({"p": len(blocks), "kind": kind, "md": raw, "text": text, "links": links})
     return blocks
 
 
@@ -100,7 +126,7 @@ def build(d):
         c["oldP"] = c["oldP"] if isinstance(c["oldP"], list) else [c["oldP"]]
     data = {
         "key": meta["key"], "title": meta["title"], "version": v, "model": changes.get("model", ""),
-        "blocks": [{k: b[k] for k in ("p", "kind", "text")} for b in blocks],
+        "blocks": [{k: b[k] for k in ("p", "kind", "text", "links")} for b in blocks],
         "prevBlocks": [{k: b[k] for k in ("p", "kind", "text")} for b in prev],
         "changes": changes["changes"],
     }
@@ -213,7 +239,7 @@ def rewrite(d, marks_path, model):
         changes.append({"oldP": g, "oldText": "\n\n".join(blocks[p]["text"] for p in g),
                         "newBlocks": list(range(first, len(out_blocks))),
                         "marks": [{"quote": m["quote"], "reason": m.get("reason", "")} for m in ms]})
-    new_doc = "\n\n".join(out_blocks) + "\n"
+    new_doc = "\n\n".join(x["md"] for x in split_blocks("\n\n".join(out_blocks))) + "\n"
     links_file = d / "links.json"
     if links_file.exists():
         new_doc, linked = apply_links(new_doc, json.loads(links_file.read_text()))
