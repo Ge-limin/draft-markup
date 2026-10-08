@@ -116,7 +116,8 @@ def apply_links(md, links):
     blocks = re.split(r"(\n\s*\n)", md)
     done = []
     for item in links:
-        if f"]({item['url']})" in md:          # already linked somewhere: link each URL once
+        body = "".join(x for k, x in enumerate(blocks) if not (k % 2 or x.lstrip().startswith(("- ", "* "))))
+        if f"]({item['url']})" in body:        # already linked in the body: link each URL once (lists don't count)
             continue
         for anchor in item["anchors"]:
             hit = False
