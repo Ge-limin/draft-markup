@@ -308,6 +308,8 @@ def rewrite(d, marks_path, model):
         what = "这一段" if len(g) == 1 else f"这连续的 {len(g)} 段（可以合并、拆分或删减段落）"
         out = gemini(model, PROMPT.replace("这一段", what).format(brief=brief, article=md, block=block, marks=lines))
         out = re.sub(r"^```(?:markdown)?\s*|\s*```$", "", out.strip())
+        if not any(blocks[p]["kind"].startswith("h") for p in g):   # models sometimes repeat the title
+            out = "\n".join(line for line in out.splitlines() if not re.match(r"^#{1,6} ", line))
         return g[0], ("" if out.strip() == "[删除]" else out.strip()), ms
 
     with ThreadPoolExecutor(6) as ex:
