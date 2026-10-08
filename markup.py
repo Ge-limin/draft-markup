@@ -148,26 +148,42 @@ def rewrite(d, marks_path, model):
         by_p.setdefault(int(m["p"]), []).append(m)
     brief = (d / "brief.md").read_text()
 
-    def one(p):
-        ms = sorted(by_p[p], key=lambda m: m["start"])
+    # neighbouring struck blocks are rewritten together so the result reads as one passage
+    groups = []
+    for p in sorted(by_p):
+        if groups and p == groups[-1][-1] + 1:
+            groups[-1].append(p)
+        else:
+            groups.append([p])
+
+    def one(g):
+        ms = sorted((m for p in g for m in by_p[p]), key=lambda m: (int(m["p"]), m["start"]))
         lines = "\n".join(f"- 「{m['quote']}」" + (f"　原因：{m['reason']}" if m.get("reason") else "") for m in ms)
-        out = gemini(model, PROMPT.format(brief=brief, article=md, block=blocks[p]["md"], marks=lines))
+        block = "\n\n".join(blocks[p]["md"] for p in g)
+        what = "这一段" if len(g) == 1 else f"这连续的 {len(g)} 段（可以合并、拆分或删减段落）"
+        out = gemini(model, PROMPT.replace("这一段", what).format(brief=brief, article=md, block=block, marks=lines))
         out = re.sub(r"^```(?:markdown)?\s*|\s*```$", "", out.strip())
-        return p, ("" if out.strip() == "[删除]" else out.strip())
+        return g[0], ("" if out.strip() == "[删除]" else out.strip()), ms
 
     with ThreadPoolExecutor(6) as ex:
-        new_md = dict(ex.map(one, sorted(by_p)))
+        results = {g0: (text, ms) for g0, text, ms in ex.map(one, groups)}
+    group_of = {p: g for g in groups for p in g}
 
     out_blocks, changes = [], []
     for b in blocks:
-        if b["p"] in new_md:
-            first = len(out_blocks)
-            pieces = split_blocks(new_md[b["p"]]) if new_md[b["p"]] else []
-            out_blocks.extend(x["md"] for x in pieces)
-            changes.append({"oldP": b["p"], "oldText": b["text"], "newBlocks": list(range(first, len(out_blocks))),
-                            "marks": [{"quote": m["quote"], "reason": m.get("reason", "")} for m in by_p[b["p"]]]})
-        else:
+        g = group_of.get(b["p"])
+        if g is None:
             out_blocks.append(b["md"])
+            continue
+        if b["p"] != g[0]:
+            continue
+        text, ms = results[g[0]]
+        first = len(out_blocks)
+        pieces = split_blocks(text) if text else []
+        out_blocks.extend(x["md"] for x in pieces)
+        changes.append({"oldP": g, "oldText": "\n\n".join(blocks[p]["text"] for p in g),
+                        "newBlocks": list(range(first, len(out_blocks))),
+                        "marks": [{"quote": m["quote"], "reason": m.get("reason", "")} for m in ms]})
     (d / f"v{v + 1}.md").write_text("\n\n".join(out_blocks) + "\n")
     rounds = d / "rounds"
     rounds.mkdir(exist_ok=True)
