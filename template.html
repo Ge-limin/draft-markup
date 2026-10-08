@@ -1,0 +1,311 @@
+<title>/*TITLE*/</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@400;600&display=swap">
+<style>
+  :root {
+    --bg: #eef1f2; --surface: #ffffff; --ink: #1c2226; --muted: #5d6a71; --line: #d5dcdf;
+    --accent: #2b5d8a; --accent-soft: #dce8f2;
+    --mark: #c2410c; --mark-bg: #fde4d4; --changed: #e7f1e9; --changed-line: #3f8a5a;
+    --serif: "Noto Serif SC", "Songti SC", "STSong", serif;
+    --sans: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #14181b; --surface: #1b2125; --ink: #e3e8ea; --muted: #94a2a9; --line: #2e373c;
+      --accent: #80b1dc; --accent-soft: #22313d; --mark: #f29a64; --mark-bg: #4a2a1b; --changed: #1f3227; --changed-line: #6cc08d;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #14181b; --surface: #1b2125; --ink: #e3e8ea; --muted: #94a2a9; --line: #2e373c;
+    --accent: #80b1dc; --accent-soft: #22313d; --mark: #f29a64; --mark-bg: #4a2a1b; --changed: #1f3227; --changed-line: #6cc08d;
+  }
+  body { background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 14px; }
+  .wrap { padding-inline: 16px; padding-block: 0 140px; max-width: 1240px; margin-inline: auto; }
+  header.top {
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg);
+    border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; padding-block: 12px;
+  }
+  header.top h1 { font-size: 16px; margin: 0; font-weight: 700; }
+  .ver { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .spacer { flex: 1; }
+  .switch { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted); cursor: pointer; }
+  .switch input { accent-color: var(--changed-line); width: 16px; height: 16px; }
+
+  .layout { display: grid; gap: 24px; grid-template-columns: 1fr; padding-top: 16px; }
+  @media (min-width: 1000px) { .layout { grid-template-columns: minmax(0, 1fr) 320px; } }
+
+  .paper { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding-block: 28px 40px; padding-inline: clamp(18px, 5vw, 56px); }
+  .hint { font-size: 13px; color: var(--muted); margin: 0 0 18px; line-height: 1.7; }
+  article { font-family: var(--serif); font-size: 17px; line-height: 1.95; max-width: 36em; margin-inline: auto; }
+  article .blk { margin: 0 0 1em; white-space: pre-wrap; border-radius: 3px; }
+  article .h1 { font-size: 26px; line-height: 1.45; font-weight: 600; margin-bottom: 22px; text-wrap: balance; }
+  article .h2 { font-size: 20px; font-weight: 600; margin-top: 30px; text-wrap: balance; }
+  article .h3 { font-size: 17px; font-weight: 600; margin-top: 24px; }
+  article .hr { border-top: 1px solid var(--line); height: 0; margin: 28px 0; }
+  article .list { font-size: 15.5px; }
+  .mk { background: var(--mark-bg); text-decoration: line-through; text-decoration-color: var(--mark); text-decoration-thickness: 1.5px; cursor: pointer; border-radius: 2px; }
+  .mk.focus { outline: 2px solid var(--mark); outline-offset: 1px; }
+  .changed .blk.was-changed { background: var(--changed); box-shadow: -10px 0 0 var(--changed), 10px 0 0 var(--changed); border-left: 3px solid var(--changed-line); padding-left: 8px; margin-left: -11px; }
+  .old { display: none; }
+  .changed .old { display: block; font-family: var(--sans); font-size: 13px; line-height: 1.7; color: var(--muted); margin: -0.6em 0 1.2em; padding: 8px 12px; border: 1px dashed var(--line); border-radius: 4px; white-space: pre-wrap; }
+  .old b { color: var(--mark); font-weight: 500; }
+
+  aside { align-self: start; }
+  @media (min-width: 1000px) { aside { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 60px); max-height: calc(100vh - 80px); overflow: auto; } }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; }
+  .card h2 { font-size: 14px; margin: 0 0 10px; display: flex; justify-content: space-between; align-items: baseline; }
+  .card h2 span { font-family: var(--mono); font-size: 12px; color: var(--muted); font-weight: 400; }
+  .list-marks { display: grid; gap: 10px; margin: 0 0 14px; padding: 0; list-style: none; }
+  .list-marks li { border-left: 3px solid var(--mark); padding: 2px 0 2px 10px; font-size: 13px; line-height: 1.6; }
+  .list-marks li.focus { background: var(--mark-bg); }
+  .list-marks .q { font-family: var(--serif); cursor: pointer; }
+  .list-marks .row { display: flex; gap: 6px; margin-top: 4px; }
+  .list-marks input { flex: 1; min-width: 0; font: inherit; font-size: 12.5px; padding: 4px 7px; border: 1px solid var(--line); border-radius: 3px; background: var(--bg); color: var(--ink); }
+  .empty { font-size: 13px; color: var(--muted); line-height: 1.7; }
+  button { font-family: var(--sans); cursor: pointer; }
+  .btn { font-size: 14px; padding: 8px 14px; border-radius: 4px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+  .btn:hover { border-color: var(--accent); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); width: 100%; }
+  .btn.danger { background: var(--mark); border-color: var(--mark); color: #fff; }
+  .btn.small { font-size: 12px; padding: 3px 8px; }
+  .btn:disabled { opacity: 0.5; cursor: default; }
+  .btn:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .status { font-size: 12.5px; color: var(--muted); margin-top: 8px; line-height: 1.6; }
+
+  .selbar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; background: var(--surface); border-top: 1px solid var(--line);
+    box-shadow: 0 -8px 24px rgba(20, 30, 40, 0.12); padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+  .selbar .inner { max-width: 1240px; margin-inline: auto; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .selbar .q { flex: 1 1 100%; font-family: var(--serif); font-size: 14px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .selbar input { flex: 1 1 220px; min-width: 0; font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--ink); }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <h1 id="title"></h1>
+    <span class="ver" id="ver"></span>
+    <span class="spacer"></span>
+    <label class="switch" for="showChanges" id="changesSwitch"><input type="checkbox" id="showChanges"> 显示上一轮改动</label>
+  </header>
+
+  <div class="layout">
+    <main>
+      <div class="paper" id="paper">
+        <p class="hint">用鼠标或手指选中不喜欢的句子或词，屏幕底部会出现「划掉」按钮，可以顺手写一句原因（不写也行）。点划过的地方可以在右侧撤销或改原因。划完点「全部提交」。</p>
+        <article id="article"></article>
+      </div>
+    </main>
+    <aside>
+      <div class="card">
+        <h2>这一轮划掉的 <span id="count">0 处</span></h2>
+        <ul class="list-marks" id="marks"></ul>
+        <p class="empty" id="emptyNote">还没有划线。</p>
+        <button type="button" class="btn primary" id="submit">全部提交，交给 Gemini 重写</button>
+        <p class="status" id="status"></p>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="selbar" id="selbar" hidden>
+  <div class="inner">
+    <div class="q" id="selQuote"></div>
+    <input id="selReason" placeholder="原因（可不写）：比如 太像 AI、太书面、不像我会说的话">
+    <button type="button" class="btn danger" id="selMark">划掉</button>
+    <button type="button" class="btn" id="selCancel">取消</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  const DATA = /*DATA*/null;
+  const V = DATA.version;
+  const $ = (id) => document.getElementById(id);
+  let marks = [];            // {id, v, p, start, end, quote, reason}
+  let db = null, writable = true, pending = null, focusId = null;
+  const ls = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
+  const LSKEY = `markup:${DATA.key}:v${V}`;
+
+  $("title").textContent = DATA.title;
+  $("ver").textContent = `第 ${V} 版${DATA.model ? " · " + DATA.model : ""}`;
+  if (!DATA.changes.length) $("changesSwitch").hidden = true;
+
+  function esc(s) { return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]); }
+
+  function renderArticle() {
+    const art = $("article");
+    art.innerHTML = "";
+    const changedOld = {};
+    DATA.changes.forEach((c) => c.newBlocks.forEach((p, i) => { if (i === 0) changedOld[p] = c; }));
+    const changedSet = new Set(DATA.changes.flatMap((c) => c.newBlocks));
+    DATA.blocks.forEach((b) => {
+      const el = document.createElement("div");
+      el.className = `blk ${b.kind}` + (changedSet.has(b.p) ? " was-changed" : "");
+      el.dataset.p = b.p;
+      if (b.kind === "hr") { art.append(el); return; }
+      const ms = marks.filter((m) => m.p === b.p).sort((a, c) => a.start - c.start);
+      let html = "", pos = 0;
+      ms.forEach((m) => {
+        const s = Math.max(m.start, pos), e = Math.max(m.end, s);
+        html += esc(b.text.slice(pos, s));
+        if (e > s) html += `<span class="mk${m.id === focusId ? " focus" : ""}" data-id="${m.id}">${esc(b.text.slice(s, e))}</span>`;
+        pos = Math.max(pos, e);
+      });
+      html += esc(b.text.slice(pos));
+      el.innerHTML = html;
+      art.append(el);
+      if (changedOld[b.p]) {
+        const o = document.createElement("div");
+        o.className = "old";
+        const c = changedOld[b.p];
+        o.innerHTML = `上一版：${esc(c.oldText)}${c.marks.length ? "<br>你划掉的：" + c.marks.map((m) => "<b>" + esc(m.quote) + "</b>" + (m.reason ? "（" + esc(m.reason) + "）" : "")).join("；") : ""}`;
+        art.append(o);
+      }
+    });
+  }
+
+  function renderList() {
+    const ul = $("marks");
+    ul.innerHTML = "";
+    const sorted = [...marks].sort((a, b) => a.p - b.p || a.start - b.start);
+    sorted.forEach((m) => {
+      const li = document.createElement("li");
+      li.className = m.id === focusId ? "focus" : "";
+      li.innerHTML = `<div class="q"></div><div class="row"><input aria-label="原因" placeholder="原因（可不写）"><button type="button" class="btn small">撤销</button></div>`;
+      li.querySelector(".q").textContent = "「" + m.quote + "」";
+      li.querySelector(".q").addEventListener("click", () => focusMark(m.id, true));
+      const inp = li.querySelector("input");
+      inp.id = "reason-" + m.id;
+      inp.value = m.reason || "";
+      let t = null;
+      inp.addEventListener("input", () => { m.reason = inp.value; clearTimeout(t); t = setTimeout(() => persist(m), 600); });
+      li.querySelector("button").addEventListener("click", () => removeMark(m.id));
+      ul.append(li);
+    });
+    $("count").textContent = `${marks.length} 处`;
+    $("emptyNote").hidden = marks.length > 0;
+  }
+
+  function render() { renderArticle(); renderList(); }
+
+  function focusMark(id, scroll) {
+    focusId = id; render();
+    if (scroll) document.querySelector(`.mk[data-id="${id}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+    else document.getElementById("reason-" + id)?.scrollIntoView({ block: "nearest" });
+  }
+
+  function offsetIn(blockEl, node, off) {
+    const r = document.createRange();
+    r.setStart(blockEl, 0);
+    r.setEnd(node, off);
+    return r.toString().length;
+  }
+
+  function readSelection() {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount) return null;
+    const range = sel.getRangeAt(0);
+    const art = $("article");
+    if (!art.contains(range.commonAncestorContainer)) return null;
+    const parts = [];
+    art.querySelectorAll(".blk").forEach((el) => {
+      if (!range.intersectsNode(el) || el.classList.contains("hr")) return;
+      const p = Number(el.dataset.p), text = DATA.blocks.find((b) => b.p === p).text;
+      const start = el.contains(range.startContainer) ? offsetIn(el, range.startContainer, range.startOffset) : 0;
+      const end = el.contains(range.endContainer) ? offsetIn(el, range.endContainer, range.endOffset) : text.length;
+      let s = start, e = end;
+      while (s < e && /\s/.test(text[s])) s++;
+      while (e > s && /\s/.test(text[e - 1])) e--;
+      if (e > s) parts.push({ p, start: s, end: e, quote: text.slice(s, e) });
+    });
+    return parts.length ? parts : null;
+  }
+
+  function onSelect() {
+    const parts = readSelection();
+    if (!parts) { if (!$("selReason").matches(":focus")) { pending = null; $("selbar").hidden = true; } return; }
+    pending = parts;
+    $("selQuote").textContent = "选中：「" + parts.map((x) => x.quote).join(" … ") + "」";
+    $("selbar").hidden = false;
+  }
+
+  async function persist(m) {
+    ls.set(LSKEY, JSON.stringify(marks));
+    if (!db || !writable) return;
+    try {
+      await db.doc("marks/" + m.id).set({ v: V, p: m.p, start: m.start, end: m.end, quote: m.quote, reason: m.reason || "", ts: new Date().toISOString() });
+      $("status").textContent = "已保存";
+    } catch (e) {
+      if (e && e.code === "invalid_argument") { writable = false; $("status").textContent = "这个页面上你没有保存权限，划线只存在这台设备上。"; }
+      else $("status").textContent = "这一条没存上，网络恢复后改一下原因会再存一次。";
+    }
+  }
+
+  async function removeMark(id) {
+    marks = marks.filter((m) => m.id !== id);
+    if (focusId === id) focusId = null;
+    render();
+    ls.set(LSKEY, JSON.stringify(marks));
+    if (db && writable) { try { await db.doc("marks/" + id).delete(); } catch {} }
+  }
+
+  function addPending() {
+    if (!pending) return;
+    const reason = $("selReason").value.trim();
+    const added = pending.map((x) => ({ id: "m" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), v: V, ...x, reason }));
+    marks.push(...added);
+    pending = null; $("selReason").value = ""; $("selbar").hidden = true;
+    window.getSelection()?.removeAllRanges();
+    render();
+    added.forEach(persist);
+  }
+
+  $("selMark").addEventListener("click", addPending);
+  $("selReason").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addPending(); } });
+  $("selCancel").addEventListener("click", () => { pending = null; $("selbar").hidden = true; window.getSelection()?.removeAllRanges(); });
+  document.addEventListener("selectionchange", () => { clearTimeout(onSelect.t); onSelect.t = setTimeout(onSelect, 120); });
+  $("article").addEventListener("click", (e) => {
+    const mk = e.target.closest(".mk");
+    if (mk && window.getSelection()?.isCollapsed) focusMark(mk.dataset.id, false);
+  });
+  $("showChanges").addEventListener("change", () => { $("paper").classList.toggle("changed", $("showChanges").checked); ls.set("markup:showChanges", $("showChanges").checked ? "1" : "0"); });
+  if (ls.get("markup:showChanges") !== "0" && DATA.changes.length) { $("showChanges").checked = true; $("paper").classList.add("changed"); }
+
+  $("submit").addEventListener("click", async () => {
+    if (!marks.length) { $("status").textContent = "还没有划线，先选中不喜欢的句子。"; return; }
+    if (!db || !writable) { $("status").textContent = "这个视图存不了提交记录。把这一轮的划线截个图发给 Claude 也可以。"; return; }
+    $("submit").disabled = true;
+    try {
+      await Promise.all(marks.map((m) => db.doc("marks/" + m.id).set({ v: V, p: m.p, start: m.start, end: m.end, quote: m.quote, reason: m.reason || "", ts: new Date().toISOString() })));
+      await db.doc("state/submitted").set({ v: V, count: marks.length, at: new Date().toISOString() });
+      $("status").textContent = `第 ${V} 版的 ${marks.length} 处划线已提交。回到对话跟 Claude 说一声，它会让 Gemini 重写这些段落，然后更新这个页面。`;
+    } catch (e) {
+      $("status").textContent = "提交没成功，再点一次试试。";
+    }
+    $("submit").disabled = false;
+  });
+
+  try { marks = (JSON.parse(ls.get(LSKEY) || "[]") || []).filter((m) => m.v === V); } catch { marks = []; }
+  render();
+
+  (async () => {
+    db = window.claude?.use ? await window.claude.use("db") : null;
+    if (!db) { $("status").textContent = "这个视图连不上存储，划线只存在这台设备上。"; return; }
+    try {
+      const snap = await db.collection("marks").get();
+      const stored = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((m) => m.v === V);
+      const byId = new Map(stored.map((m) => [m.id, m]));
+      marks.forEach((m) => { if (!byId.has(m.id)) { byId.set(m.id, m); persist(m); } });
+      marks = [...byId.values()];
+      const st = await db.doc("state/submitted").get();
+      if (st.exists && st.data().v === V) $("status").textContent = `第 ${V} 版已提交过 ${st.data().count} 处。还可以继续划，再点一次提交。`;
+      render();
+    } catch { /* keep local marks */ }
+  })();
+})();
+</script>
