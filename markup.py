@@ -116,6 +116,8 @@ def apply_links(md, links):
     blocks = re.split(r"(\n\s*\n)", md)
     done = []
     for item in links:
+        if f"]({item['url']})" in md:          # already linked somewhere: link each URL once
+            continue
         for anchor in item["anchors"]:
             hit = False
             for k, b in enumerate(blocks):
