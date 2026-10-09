@@ -73,6 +73,15 @@ def apply_verbatim(md, text_offset, edits):
     return md
 
 
+def prefix_len(md, kind):
+    """Length of the markup before a block's text: '## ' for headings, '> ' for a one-line quote."""
+    if kind.startswith("h") and kind != "hr":
+        return len(md) - len(md.lstrip("#").lstrip())
+    if kind == "quote":
+        return len(md) - len(md.lstrip().lstrip(">").lstrip())
+    return 0
+
+
 def split_blocks(md):
     blocks = []
     chunks = []
@@ -94,10 +103,12 @@ def split_blocks(md):
             kind, text = "hr", ""
         elif all(line.lstrip().startswith(("- ", "* ")) for line in raw.splitlines()):
             kind, text = "list", plain(raw)
+        elif "\n" not in raw.strip() and raw.lstrip().startswith(">"):
+            kind, text = "quote", plain(raw[prefix_len(raw, "quote"):])
         else:
             kind, text = "p", plain(raw)
         if kind != "hr":
-            text, links = link_spans(m.group(2) if m else raw)
+            text, links = link_spans(raw[prefix_len(raw, kind):])
         else:
             links = []
         blocks.append({"p": len(blocks), "kind": kind, "md": raw, "text": text, "links": links})
@@ -278,7 +289,7 @@ def rewrite(d, marks_path, model):
     verbatim = [m for m in marks if "replace" in m]
     for p in {int(m["p"]) for m in verbatim}:
         b = blocks[p]
-        head = len(b["md"]) - len(b["md"].lstrip("#").lstrip()) if b["kind"].startswith("h") else 0
+        head = prefix_len(b["md"], b["kind"])
         body = b["md"][head:]
         edits = [(m["start"], m["end"], m["replace"]) for m in verbatim if int(m["p"]) == p]
         b["md"] = b["md"][:head] + apply_verbatim(body, 0, edits)
