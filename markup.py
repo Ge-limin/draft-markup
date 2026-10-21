@@ -10,10 +10,11 @@ An article lives in its own directory:
 Commands:
     python3 markup.py build   <dir>                    # page.html from the current version
     python3 markup.py rewrite <dir> <marks> [--model M] # marks: a JSON file or a directory of JSON docs
-The rewrite command needs GEMINI_API_KEY; run it inside `zsh -ic '...'` so the key from the
-user's shell is present. Requests go through the ClashX proxy at 127.0.0.1:7890.
+Model-backed rewrites need GEMINI_API_KEY in the environment. Standard HTTPS_PROXY and
+NO_PROXY environment variables control proxy settings.
 """
 import argparse
+import html
 import json
 import os
 import re
@@ -170,7 +171,7 @@ def build(d):
         "changes": changes["changes"],
     }
     page = (HERE / "template.html").read_text()
-    page = page.replace("/*TITLE*/", meta["title"]).replace(
+    page = page.replace("/*TITLE*/", html.escape(meta["title"])).replace(
         "/*DATA*/null", json.dumps(data, ensure_ascii=False).replace("</", "<\\/"))
     (d / "page.html").write_text(page)
     print(f"{d / 'page.html'}: version {v}, {len(blocks)} blocks, {len(changes['changes'])} changed in the last round")
@@ -199,7 +200,7 @@ def gemini(model, prompt, as_json=False):
                          "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json"} if as_json
                          else {"temperature": 0.8}}).encode(),
         headers={"Content-Type": "application/json", "x-goog-api-key": os.environ["GEMINI_API_KEY"]})
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({"https": "http://127.0.0.1:7890"}))
+    opener = urllib.request.build_opener()
     d = json.load(opener.open(req, timeout=600))
     return "".join(p.get("text", "") for p in d["candidates"][0]["content"]["parts"] if not p.get("thought")).strip()
 

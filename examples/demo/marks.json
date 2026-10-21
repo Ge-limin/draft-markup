@@ -1,0 +1,12 @@
+[
+  {
+    "id": "demo-edit",
+    "v": 1,
+    "p": 1,
+    "start": 27,
+    "end": 50,
+    "quote": "It is an amazing place.",
+    "reason": "Remove the promotional sentence.",
+    "replace": ""
+  }
+]

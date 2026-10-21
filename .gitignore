@@ -1,1 +1,27 @@
 __pycache__/
+*.py[cod]
+.DS_Store
+.venv/
+.env
+.env.*
+*.pem
+*.key
+
+# Keep real article data outside this repository. These are a second guard.
+articles/
+drafts/
+private/
+meta.json
+brief.md
+links.json
+v[0-9]*.md
+page.html
+marks.json
+rounds/
+划线记录.md
+
+# Only these deliberately fictional example inputs are public.
+!examples/demo/meta.json
+!examples/demo/brief.md
+!examples/demo/v1.md
+!examples/demo/marks.json
