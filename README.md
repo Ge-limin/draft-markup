@@ -15,7 +15,8 @@ use other languages.
 - A Python CLI that builds the page and processes exported annotations.
 - Direct replacements and deletions, plus Gemini rewrites for editorial comments.
 - Versioned Markdown, per-round JSON records, and a readable annotation log.
-- A deliberately fictional example. No personal drafts, voice samples, or credentials.
+- A fictional runnable example and [two real Chinese writing references](examples/real/README.md),
+  including article text and annotation logs shared by their author.
 
 This is an assisted editing workflow, not a standalone hosted editor. Online submission
 uses a Claude Artifact host exposing `window.claude.use("db")`. Publishing the page,
@@ -73,7 +74,8 @@ and retained author wording before accepting any model output.
 
 ## Article files and annotation format
 
-Keep real article directories **outside this repository**.
+Keep your working article directories **outside this repository**. The selected
+[real references](examples/real/README.md) are intentionally published snapshots.
 
 | File | Purpose |
 |---|---|
@@ -104,7 +106,8 @@ one-line quotes, and basic inline formatting. This is an early tool; review diff
 especially for complex formatting or overlapping selections. Automated classification
 is a heuristic, not a human approval step. There is no automatic fact checker.
 The ignore rules help keep article files and secrets out of Git, but review staged
-files before committing. The synthetic example is the only article data included here.
+files before committing. Published article data is limited to the fictional example
+and the two author-approved references; private briefs and working directories are not included.
 
 Run the offline checks with `python3 -m unittest discover -s tests -v`.
 
@@ -115,6 +118,10 @@ Run the offline checks with `python3 -m unittest discover -s tests -v`.
 `draft-markup` 用于 Markdown 稿件的划线修改：在网页选中文字、写批注，
 由 Gemini 修改相关段落，再左右对比新旧版本。网页界面和内置提示词为中文，
 正文可以使用其他语言。
+
+仓库还收录了作者授权公开的[两篇真实中文文章及划线记录](examples/real/README.md)：
+《OpenAI 公开了一批数学成果，so did I》（反差方案）和
+《Sharing our AI progress in mathematics》，可对照正文查看实际修改意见。
 
 ### 使用方式
 
@@ -143,7 +150,8 @@ Gemini 模型。网络配置使用标准 `HTTPS_PROXY`、`NO_PROXY` 环境变量
 
 ### 隐私与边界
 
-真实稿件请放在仓库外。此仓库只含工具代码和虚构示例，不含私人稿件、文风样本或密钥。
+日常工作稿件请放在仓库外。此仓库包含工具代码、虚构示例，以及作者明确选定的两篇真实中文
+正文与划线记录；未包含私人 brief、文风语料库、其他稿件或密钥。
 生成的网页包含当前正文、上一版正文及已有反馈，分享页面会同时分享这些内容。
 网页会加载 Google Fonts；本地划线保存在浏览器中，Artifact 模式还会将划线发送给宿主数据库。
 使用模型改写时，全文、brief 和相关批注会发送给 Google。
