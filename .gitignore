@@ -17,6 +17,10 @@ links.json
 v[0-9]*.md
 page.html
 marks.json
+*-marks.json
+task.json
+task-v*.json
+*.results.json
 rounds/
 划线记录.md
 

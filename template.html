@@ -1,16 +1,14 @@
 <title>/*TITLE*/</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@400;600&display=swap">
 <style>
+  [hidden] { display: none !important; }
   :root {
     --bg: #eef1f2; --surface: #ffffff; --ink: #1c2226; --muted: #5d6a71; --line: #d5dcdf;
     --accent: #2b5d8a; --accent-soft: #dce8f2;
     --mark: #c2410c; --mark-bg: #fde4d4; --changed: #e7f1e9; --changed-line: #3f8a5a;
     --del-bg: #fff5f5; --del-strong: #ffc9c9; --ins-bg: #f2fbf4; --ins-strong: #b9eac6;
-    --serif: "Noto Serif SC", "Songti SC", "STSong", serif;
-    --sans: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", sans-serif;
-    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    --serif: "Songti SC", "STSong", serif;
+    --sans: "PingFang SC", "Hiragino Sans GB", sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, monospace;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
@@ -106,6 +104,8 @@
   .list-marks .q { font-family: var(--serif); cursor: pointer; }
   .list-marks .row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
   .list-marks .row input:not([type]) { flex: 1; min-width: 0; font: inherit; font-size: 12.5px; padding: 4px 7px; border: 1px solid var(--line); border-radius: 3px; background: var(--bg); color: var(--ink); }
+  select { font: inherit; padding: 5px; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 3px; }
+  .list-marks .replacement { width: 100%; box-sizing: border-box; }
   .empty { font-size: 13px; color: var(--muted); line-height: 1.7; }
   button { font-family: var(--sans); cursor: pointer; }
   .btn { font-size: 14px; padding: 8px 14px; border-radius: 4px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
@@ -150,7 +150,7 @@
         <div class="cmp" id="cmp"></div>
       </section>
       <div class="paper" id="paper">
-        <p class="hint">选中不喜欢的句子或词，屏幕底部会出现「划掉」按钮，可以写一句原因（不写也行）。批注里直接写要换成的话，或者写「删」，会一字不改地照办；写原因的交给 Gemini 改写。划完点「全部提交」。</p>
+        <p class="hint">选中文字后添加批注，可写修改意见，或明确选择「原样替换」「删除」。批注仅保存在当前浏览器；完成后下载 JSON 留存或交给后续改稿工具。导入 JSON 会恢复该文件中的整轮批注，替换当前批注。本页无需账号或网络。</p>
         <article id="article"></article>
       </div>
     </main>
@@ -159,8 +159,11 @@
         <h2>这一轮划掉的 <span id="count">0 处</span></h2>
         <ul class="list-marks" id="marks"></ul>
         <p class="empty" id="emptyNote">还没有划线。</p>
-        <button type="button" class="btn primary" id="submit">全部提交，交给 Gemini 重写</button>
-        <p class="status" id="status"></p>
+        <button type="button" class="btn primary" id="exportMarks">下载批注 JSON</button>
+        <button type="button" class="btn" id="importMarks">导入批注 JSON</button>
+        <input type="file" id="importFile" accept=".json,application/json" hidden>
+        <p class="status" id="saveStatus" role="status"></p>
+        <p class="status" id="status" role="status"></p>
       </div>
     </aside>
   </div>
@@ -169,7 +172,9 @@
 <div class="selbar" id="selbar" hidden>
   <div class="inner">
     <div class="q" id="selQuote"></div>
-    <input id="selReason" placeholder="批注（可不写）：原因，或者直接写要换成的话；写「删」就是删掉">
+    <select id="selType" aria-label="批注类型"><option value="comment">修改意见</option><option value="replace">原样替换</option><option value="delete">删除</option></select>
+    <input id="selReason" aria-label="修改意见" placeholder="修改意见或原因（可不写）">
+    <input id="selReplace" aria-label="原样替换文本" placeholder="要原样采用的替换文本" hidden>
     <button type="button" class="btn danger" id="selMark">划掉</button>
     <button type="button" class="btn" id="selCancel">取消</button>
   </div>
@@ -181,12 +186,57 @@
   const V = DATA.version;
   const $ = (id) => document.getElementById(id);
   let marks = [];            // {id, v, p, start, end, quote, reason}
-  let db = null, writable = true, pending = null, focusId = null;
-  const ls = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
-  const LSKEY = `markup:${DATA.key}:v${V}`;
+  let pending = null, focusId = null;
+  const LSKEY = `markup:${DATA.key}:v${V}:${DATA.sourceHash}`;
+  const hasReplace = (m) => Object.prototype.hasOwnProperty.call(m, "replace");
+  const markType = (m) => !hasReplace(m) ? "comment" : m.replace === "" ? "delete" : "replace";
+
+  function envelope(items = marks) {
+    return { schema: "draft-markup/marks-v1", key: DATA.key, version: V,
+      sourceHash: DATA.sourceHash, offsetEncoding: "utf16", marks: items };
+  }
+
+  // Return a fresh, allowlisted copy only after every mark has been checked.
+  function validateEnvelope(value) {
+    if (!value || value.schema !== "draft-markup/marks-v1" || value.key !== DATA.key ||
+        value.version !== V || value.sourceHash !== DATA.sourceHash || value.offsetEncoding !== "utf16" ||
+        !Array.isArray(value.marks)) throw new Error("文件格式、文章、版本或正文指纹不匹配。");
+    const ids = new Set();
+    const clean = value.marks.map((m) => {
+      if (!m || typeof m.id !== "string" || !/^[A-Za-z0-9_-]{1,100}$/.test(m.id) || ids.has(m.id) ||
+          m.v !== V || !Number.isInteger(m.p) || !Number.isInteger(m.start) || !Number.isInteger(m.end) ||
+          typeof m.quote !== "string" || typeof m.reason !== "string" ||
+          (hasReplace(m) && typeof m.replace !== "string")) throw new Error("批注字段无效或 ID 重复。");
+      const block = DATA.blocks.find((b) => b.p === m.p);
+      const splitsPair = (at) => at > 0 && at < block.text.length &&
+        /[\uD800-\uDBFF]/.test(block.text[at - 1]) && /[\uDC00-\uDFFF]/.test(block.text[at]);
+      if (!block || block.kind === "hr" || m.start < 0 || m.end <= m.start || m.end > block.text.length ||
+          splitsPair(m.start) || splitsPair(m.end) || block.text.slice(m.start, m.end) !== m.quote)
+        throw new Error("划线范围或原文不匹配。");
+      ids.add(m.id);
+      const result = { id: m.id, v: V, p: m.p, start: m.start, end: m.end, quote: m.quote, reason: m.reason };
+      if (hasReplace(m)) result.replace = m.replace;
+      return result;
+    });
+    const sorted = [...clean].sort((a, b) => a.p - b.p || a.start - b.start);
+    for (let i = 1; i < sorted.length; i++) {
+      if (sorted[i].p === sorted[i - 1].p && sorted[i].start < sorted[i - 1].end)
+        throw new Error("存在重叠划线，请先撤销重叠的批注。");
+    }
+    return clean;
+  }
+
+  function persist() {
+    try {
+      localStorage.setItem(LSKEY, JSON.stringify(envelope()));
+      $("saveStatus").textContent = "已保存到当前浏览器。请下载 JSON 备份；更换浏览器或清理缓存后不会保留。";
+    } catch {
+      $("saveStatus").textContent = "浏览器保存失败，当前批注仅在此页面内存中。请立即下载 JSON，关闭页面会丢失未保存内容。";
+    }
+  }
 
   $("title").textContent = DATA.title;
-  $("ver").textContent = `第 ${V} 版${DATA.model ? " · " + DATA.model : ""}`;
+  $("ver").textContent = `第 ${V} 版`;
   if (!DATA.prevBlocks.length) $("tabs").hidden = true;
 
   function esc(s) { return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]); }
@@ -210,7 +260,7 @@
         while (e < n && mk[e] === mk[k] && ln[e] === ln[k]) e++;
         let piece = esc(b.text.slice(k, e));
         if (ln[k]) piece = `<span class="lnk" title="${esc(ln[k])}">${piece}</span>`;
-        if (mk[k]) piece = `<span class="mk${mk[k] === focusId ? " focus" : ""}" data-id="${mk[k]}">${piece}</span>`;
+        if (mk[k]) piece = `<span class="mk${mk[k] === focusId ? " focus" : ""}" data-id="${esc(mk[k])}">${piece}</span>`;
         html += piece;
         k = e;
       }
@@ -226,14 +276,34 @@
     sorted.forEach((m) => {
       const li = document.createElement("li");
       li.className = m.id === focusId ? "focus" : "";
-      li.innerHTML = `<div class="q"></div><div class="row"><input aria-label="批注" placeholder="原因，或者直接写要换成的话"><button type="button" class="btn small">撤销</button></div>`;
+      li.innerHTML = `<div class="q"></div><div class="row"><select aria-label="批注类型"><option value="comment">修改意见</option><option value="replace">原样替换</option><option value="delete">删除</option></select><button type="button" class="btn small">撤销</button></div><div class="row"><input class="reason" aria-label="修改意见" placeholder="修改意见或原因（可不写）"></div><div class="row"><input class="replacement" aria-label="原样替换文本" placeholder="要原样采用的替换文本"></div>`;
       li.querySelector(".q").textContent = "「" + m.quote + "」";
       li.querySelector(".q").addEventListener("click", () => focusMark(m.id, true));
-      const inp = li.querySelector("input");
+      const inp = li.querySelector(".reason"), replacement = li.querySelector(".replacement"), type = li.querySelector("select");
       inp.id = "reason-" + m.id;
-      inp.value = m.reason || "";
-      let t = null;
-      inp.addEventListener("input", () => { m.reason = inp.value; clearTimeout(t); t = setTimeout(() => persist(m), 600); });
+      inp.value = m.reason;
+      type.value = markType(m);
+      replacement.value = m.replace || "";
+      replacement.parentElement.hidden = type.value !== "replace";
+      inp.addEventListener("input", () => { m.reason = inp.value; persist(); });
+      replacement.addEventListener("input", () => {
+        replacement.setCustomValidity(replacement.value ? "" : "请填写替换文本，或选择删除。");
+        if (!replacement.value) {
+          $("saveStatus").textContent = "替换文本不能为空；此处仍保存着上一条有效文本。请填写文本，或选择「删除」。";
+          return;
+        }
+        m.replace = replacement.value; persist();
+      });
+      type.addEventListener("change", () => {
+        replacement.parentElement.hidden = type.value !== "replace";
+        if (type.value === "comment") delete m.replace;
+        else {
+          if (type.value === "replace" && !replacement.value) replacement.value = m.quote;
+          m.replace = type.value === "delete" ? "" : replacement.value;
+        }
+        replacement.setCustomValidity("");
+        persist();
+      });
       li.querySelector("button").addEventListener("click", () => removeMark(m.id));
       ul.append(li);
     });
@@ -278,43 +348,46 @@
 
   function onSelect() {
     const parts = readSelection();
-    if (!parts) { if (!$("selReason").matches(":focus")) { pending = null; $("selbar").hidden = true; } return; }
+    if (!parts) { if (!$("selbar").contains(document.activeElement)) { pending = null; $("selbar").hidden = true; } return; }
     pending = parts;
     $("selQuote").textContent = "选中：「" + parts.map((x) => x.quote).join(" … ") + "」";
     $("selbar").hidden = false;
   }
 
-  async function persist(m) {
-    ls.set(LSKEY, JSON.stringify(marks));
-    if (!db || !writable) return;
-    try {
-      await db.doc("marks/" + m.id).set({ v: V, p: m.p, start: m.start, end: m.end, quote: m.quote, reason: m.reason || "", ts: new Date().toISOString() });
-      $("status").textContent = "已保存";
-    } catch (e) {
-      if (e && e.code === "invalid_argument") { writable = false; $("status").textContent = "这个页面上你没有保存权限，划线只存在这台设备上。"; }
-      else $("status").textContent = "这一条没存上，网络恢复后改一下原因会再存一次。";
-    }
-  }
-
-  async function removeMark(id) {
+  function removeMark(id) {
     marks = marks.filter((m) => m.id !== id);
     if (focusId === id) focusId = null;
-    render();
-    ls.set(LSKEY, JSON.stringify(marks));
-    if (db && writable) { try { await db.doc("marks/" + id).delete(); } catch {} }
+    persist(); render();
   }
 
   function addPending() {
     if (!pending) return;
-    const reason = $("selReason").value.trim();
-    const added = pending.map((x) => ({ id: "m" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), v: V, ...x, reason }));
-    marks.push(...added);
-    pending = null; $("selReason").value = ""; $("selbar").hidden = true;
+    if (pending.some((x) => marks.some((m) => m.p === x.p && m.start < x.end && x.start < m.end))) {
+      $("status").textContent = "这次选区与已有划线重叠。请先撤销原批注，或重新选择未划线的文字。";
+      return;
+    }
+    const type = $("selType").value, reason = $("selReason").value;
+    if (type === "replace" && !$("selReplace").value) {
+      $("status").textContent = "请填写原样替换文本；要删除原文，请选择「删除」。"; return;
+    }
+    if (type === "replace" && pending.length > 1) {
+      $("status").textContent = "原样替换请逐段划线，以免同一句替换文本重复写入多个段落。"; return;
+    }
+    const added = pending.map((x) => {
+      const m = { id: "m" + Date.now().toString(36) + Math.random().toString(36).slice(2, 12), v: V, ...x, reason };
+      if (type !== "comment") m.replace = type === "delete" ? "" : $("selReplace").value;
+      return m;
+    });
+    try { marks = validateEnvelope(envelope([...marks, ...added])); }
+    catch (e) { $("status").textContent = e.message; return; }
+    pending = null; $("selReason").value = ""; $("selReplace").value = "";
+    $("selType").value = "comment"; $("selReplace").hidden = true; $("selbar").hidden = true;
     window.getSelection()?.removeAllRanges();
-    render();
-    added.forEach(persist);
+    $("status").textContent = "";
+    persist(); render();
   }
 
+  $("selType").addEventListener("change", () => { $("selReplace").hidden = $("selType").value !== "replace"; });
   $("selMark").addEventListener("click", addPending);
   $("selReason").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addPending(); } });
   $("selCancel").addEventListener("click", () => { pending = null; $("selbar").hidden = true; window.getSelection()?.removeAllRanges(); });
@@ -414,42 +487,48 @@
     $("cmpView").hidden = !cmp;
     $("paper").hidden = cmp;
     if (cmp) { renderCompare(); $("selbar").hidden = true; }
-    ls.set("markup:tab", cmp ? "cmp" : "mark");
+
   }
   $("tabMark").addEventListener("click", () => setTab(false));
   $("tabCmp").addEventListener("click", () => setTab(true));
 
-  $("submit").addEventListener("click", async () => {
-    if (!marks.length) { $("status").textContent = "还没有划线，先选中不喜欢的句子。"; return; }
-    if (!db || !writable) { $("status").textContent = "这个视图存不了提交记录。把这一轮的划线截个图发给 Claude 也可以。"; return; }
-    $("submit").disabled = true;
+  $("exportMarks").addEventListener("click", () => {
     try {
-      await Promise.all(marks.map((m) => db.doc("marks/" + m.id).set({ v: V, p: m.p, start: m.start, end: m.end, quote: m.quote, reason: m.reason || "", ts: new Date().toISOString() })));
-      await db.doc("state/submitted").set({ v: V, count: marks.length, at: new Date().toISOString() });
-      $("status").textContent = `第 ${V} 版的 ${marks.length} 处划线已提交。回到对话跟 Claude 说一声，它会让 Gemini 重写这些段落，然后更新这个页面。`;
-    } catch (e) {
-      $("status").textContent = "提交没成功，再点一次试试。";
-    }
-    $("submit").disabled = false;
+      const invalid = document.querySelector(".replacement:invalid");
+      if (invalid) { invalid.reportValidity(); throw new Error("有一处原样替换文本为空，请补齐或选择删除。"); }
+      const json = JSON.stringify(envelope(validateEnvelope(envelope())), null, 2);
+      const url = URL.createObjectURL(new Blob([json + "\n"], { type: "application/json" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${String(DATA.key).replace(/[^A-Za-z0-9_-]/g, "_")}-v${V}-marks.json`;
+      document.body.append(link); link.click(); link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      $("status").textContent = `已发起下载 ${marks.length} 处批注，请在浏览器下载列表确认文件。`;
+    } catch (e) { $("status").textContent = "下载失败：" + e.message; }
+  });
+  $("importMarks").addEventListener("click", () => $("importFile").click());
+  $("importFile").addEventListener("change", async () => {
+    const file = $("importFile").files[0];
+    if (!file) return;
+    try {
+      if (file.size > 10 * 1024 * 1024) throw new Error("文件超过 10 MB，请检查是否选错文件。");
+      const restored = validateEnvelope(JSON.parse(await file.text()));
+      marks = restored; focusId = null; pending = null; $("selbar").hidden = true;
+      persist(); render();
+      $("status").textContent = `已恢复 ${marks.length} 处批注。`;
+    } catch (e) { $("status").textContent = "导入失败，现有批注未改变：" + e.message; }
+    finally { $("importFile").value = ""; }
   });
 
-  try { marks = (JSON.parse(ls.get(LSKEY) || "[]") || []).filter((m) => m.v === V); } catch { marks = []; }
+  try {
+    const saved = localStorage.getItem(LSKEY);
+    if (saved) {
+      marks = validateEnvelope(JSON.parse(saved));
+      $("saveStatus").textContent = "已恢复当前浏览器中的批注。请下载 JSON 备份。";
+    } else $("saveStatus").textContent = "批注会保存在当前浏览器中，请下载 JSON 备份。";
+  } catch (e) {
+    $("saveStatus").textContent = "无法读取或恢复本地批注：" + e.message + "。可继续标注并下载 JSON。";
+  }
   render();
-  if (DATA.prevBlocks.length) setTab(ls.get("markup:tab") !== "mark");
-
-  (async () => {
-    db = window.claude?.use ? await window.claude.use("db") : null;
-    if (!db) { $("status").textContent = "这个视图连不上存储，划线只存在这台设备上。"; return; }
-    try {
-      const snap = await db.collection("marks").get();
-      const stored = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((m) => m.v === V);
-      const byId = new Map(stored.map((m) => [m.id, m]));
-      marks.forEach((m) => { if (!byId.has(m.id)) { byId.set(m.id, m); persist(m); } });
-      marks = [...byId.values()];
-      const st = await db.doc("state/submitted").get();
-      if (st.exists && st.data().v === V) $("status").textContent = `第 ${V} 版已提交过 ${st.data().count} 处。还可以继续划，再点一次提交。`;
-      render();
-    } catch { /* keep local marks */ }
-  })();
 })();
 </script>

@@ -1,164 +1,207 @@
 # draft-markup
 
-Strike out a sentence. Keep the rest of your draft.
+Mark what needs changing. Choose separately who does the writing.
 
-A small Python and HTML tool for reviewing Markdown drafts: mark text in a browser,
-add a note, rewrite selected paragraphs with Gemini, then compare the next version
-side by side. The interface and built-in instructions are in Chinese; drafts may
-use other languages.
+`draft-markup` has two independent parts:
 
-[中文说明](#中文说明) · [MIT license](LICENSE)
+- **Annotation tool:** a local browser page and `markup.py` for marking text, exporting
+  feedback, applying edits, and comparing versions. No AI account, API key, or Claude
+  Artifact host is required.
+- **Writing tool:** optional `writer.py` for interpreting feedback and rewriting the
+  marked paragraphs. It defaults to **Gemini 2.5 Pro**. Other recommended models can be
+  explicitly selected through OpenRouter.
 
-## What is included
+[中文说明](#中文说明) · [Real writing references](examples/real/README.md) · [MIT license](LICENSE)
 
-- A marking page with annotations, undo, and comparison with the previous version.
-- A Python CLI that builds the page and processes exported annotations.
-- Direct replacements and deletions, plus Gemini rewrites for editorial comments.
-- Versioned Markdown, per-round JSON records, and a readable annotation log.
-- A fictional runnable example and [two real Chinese writing references](examples/real/README.md),
-  including article text and annotation logs shared by their author.
+## Requirements
 
-This is an assisted editing workflow, not a standalone hosted editor. Online submission
-uses a Claude Artifact host exposing `window.claude.use("db")`. Publishing the page,
-retrieving annotations, and rerunning the CLI are manual or assistant-operated steps;
-this repository does not supply that hosting integration. A local page displays the
-draft and saves marks in browser storage, but has no built-in JSON export button.
+Python 3.9+ and a browser. Python uses the standard library only. The generated page
+uses system fonts and local browser storage; it makes no AI or hosting requests.
+Node.js is only needed for the optional frontend checks.
 
-## Try it without an API key
+Keep working articles outside the source repository. An article directory starts with
+`meta.json` containing a unique `key` and `title`, and `v1.md` containing the draft.
+`brief.md` supplies writing instructions and facts when using the optional writer.
 
-Requires Python 3.9+ and a browser. Python uses only the standard library.
-Run these commands from the repository root on macOS or Linux:
+## Annotate without AI
+
+```sh
+python3 markup.py build /path/to/article
+```
+
+Open the printed `page.html` path in your browser. Select text, add a comment, and mark
+it. You can specify an exact replacement or deletion, or leave a normal editorial
+comment. Changes are saved locally; use **Download annotation JSON** (下载批注 JSON) to
+download an independent file. **Import annotation JSON** (导入批注 JSON) restores a matching export.
+The UI is currently Chinese; article text can use other languages.
+
+Exports identify the article, version, and source-text hash. Imports reject mismatched
+versions, invalid ranges, and overlapping selections. A storage failure is shown on
+screen; export your annotations before closing the page if local saving is unavailable.
+
+### Try an entire offline editing round
+
+From the repository root on macOS or Linux:
 
 ```sh
 demo_dir=$(mktemp -d)
 cp examples/demo/* "$demo_dir/"
 python3 markup.py build "$demo_dir"
-# Open the printed page.html path in your browser.
-
-python3 markup.py rewrite "$demo_dir" "$demo_dir/marks.json"
+python3 markup.py prepare "$demo_dir" "$demo_dir/marks.json"
+python3 markup.py apply "$demo_dir" "$demo_dir/task.json" "$demo_dir/task.results.json"
 python3 markup.py build "$demo_dir"
-# Reload page.html to compare the two versions.
 ```
 
-The example annotation explicitly specifies a deletion, so this complete CLI round
-makes no model request. Use the same directory for subsequent rounds.
+Open or reload the printed page to compare versions. The fictional example contains
+an explicit deletion, so its generated result template is ready to apply with no AI.
+To use your own annotations, substitute the JSON downloaded from the page.
 
-## Model-backed editing
-
-Set `GEMINI_API_KEY` in your shell using your preferred secret manager. Do not put it
-in article files or in the HTML page. Standard `HTTPS_PROXY` and `NO_PROXY`
-environment variables control proxy settings; no machine-specific proxy is required.
+## Let any editor or assistant supply the changes
 
 ```sh
-python3 markup.py build /path/to/article
-python3 markup.py rewrite /path/to/article /path/to/exported-marks.json
+python3 markup.py prepare /path/to/article /path/to/annotations.json
+# Complete task.results.json using task.json, manually or with any assistant.
+python3 markup.py apply /path/to/article /path/to/task.json /path/to/task.results.json
 python3 markup.py build /path/to/article
 ```
 
-The configured default model is `gemini-2.5-pro`. Use `--model MODEL_ID` on `rewrite`
-to select another Gemini model available to your account. Model requests use the
-Google Gemini API and may incur charges.
+`prepare` writes a task file and a separate result template. The task includes the
+article, optional brief, marked passages, and exact author wording that must survive.
+Fill each result group's `text` with the revised Markdown; an empty string deletes
+that group. Explicit replacements and deletions are applied by the core itself.
+Existing task files are never overwritten: for a later round, use an unused path such
+as `--output /path/to/article/task-v2.json` and its matching `task-v2.results.json`.
 
-In a compatible Artifact host, enable the database capability (`capabilities: {db: {}}`),
-publish `page.html`, and annotate the draft. Marks are stored under `marks/<id>`;
-submission records are stored at `state/submitted`. After submission, retrieve the
-marks through the host's data tools and run the CLI. Rebuild and republish the page
-after each round.
+`apply` validates the source version and hash, task identity, required groups, and
+protected author wording before creating the next version. It rejects missing,
+duplicate, or unexpected groups. Paragraphs outside the marked groups are retained.
+The tool does not evaluate factual accuracy or literary quality; review the diff.
 
-Annotations are classified as replacements, deletions, or comments. Inspect the printed
-classification and the resulting diff. To force a decision, provide a `replace` string
-in an input mark (`""` means delete), or create `rounds/r<N>-overrides.json` mapping
-mark IDs to replacement strings, `""` for deletion, or `null` for editorial comments.
-Neighboring paragraphs with comments are rewritten together. Review factual accuracy
-and retained author wording before accepting any model output.
+## Optional writing tool: Gemini by default
 
-## Article files and annotation format
+Set `GEMINI_API_KEY` in your environment using your preferred secret manager, then:
 
-Keep your working article directories **outside this repository**. The selected
-[real references](examples/real/README.md) are intentionally published snapshots.
+```sh
+python3 writer.py rewrite /path/to/article /path/to/annotations.json
+python3 markup.py build /path/to/article
+```
+
+The default is Google's Gemini API with `gemini-2.5-pro`, preserving the existing
+writing preference. This is the stable model, **not the retired 03-25 experimental
+version**. Google currently limits 2.5 model access to users who have actively used
+those models before; a new project may not have access. Choose another available
+model explicitly if needed. [Google model lifecycle](https://ai.google.dev/gemini-api/docs/deprecations)
+
+To use OpenRouter, set `OPENROUTER_API_KEY` and select it explicitly:
+
+```sh
+python3 writer.py rewrite /path/to/article /path/to/annotations.json \
+  --provider openrouter --model anthropic/claude-opus-4.6
+python3 writer.py --list-models
+```
+
+Recommended options reflect the author's writing preferences, not a benchmark ranking.
+Catalog notes were checked on **2026-10-21**; listing a model does not guarantee account
+access or unchanged behavior.
+
+| Writing option | OpenRouter ID | Note |
+|---|---|---|
+| Claude Opus 4.6 | `anthropic/claude-opus-4.6` | [Catalog entry](https://openrouter.ai/anthropic/claude-opus-4.6) |
+| Claude Sonnet 4.5 | `anthropic/claude-sonnet-4.5` | [Catalog entry](https://openrouter.ai/anthropic/claude-sonnet-4.5) |
+| DeepSeek V3.2 | `deepseek/deepseek-v3.2` | [Catalog entry](https://openrouter.ai/deepseek/deepseek-v3.2) |
+| Gemini 3.7 Flash | `google/gemini-3.7-flash` | [Still listed](https://openrouter.ai/google/gemini-3.7-flash); the Google API name now routes to 3.8 Flash, so do not assume the original behavior |
+| Gemini 2.5 Pro, stable | `google/gemini-2.5-pro` | [Current entry](https://openrouter.ai/google/gemini-2.5-pro); distinct from the old “Gemini Pro 0325” name |
+
+Google documents the 3.7-to-3.8 routing change and retirement of the old 03-25 model
+in its [release notes](https://ai.google.dev/gemini-api/docs/changelog). The old
+[OpenRouter 03-25 preview page](https://openrouter.ai/google/gemini-2.5-pro-preview-03-25)
+redirects to the stable model. The writer does not silently translate retired IDs,
+switch providers, or try a different model after a failure.
+
+The writer classifies ordinary comments as replacements, deletions, or rewrite requests,
+then processes neighboring marked paragraphs together. Explicit choices from the
+annotation page bypass classification. Inspect the classification output and final diff.
+Model calls may incur charges; standard `HTTPS_PROXY` and `NO_PROXY` configure networking.
+
+## Files and compatibility
 
 | File | Purpose |
 |---|---|
-| `meta.json` | Required `key` and `title`; optional `artifact_url` and `v1_model` |
-| `brief.md` | Writing instructions and permitted facts; required by `rewrite` |
-| `v1.md`, `v2.md`, … | Drafts; the highest numbered version is current |
-| `links.json` | Optional checked links: `[{"anchors": ["text"], "url": "https://example.com"}]` |
-| `rounds/` | Annotation records, change mappings, and optional classification overrides |
-| `划线记录.md` | Append-only human-readable annotation history |
-| `page.html` | Generated review page with current and previous draft text |
+| `meta.json` | Required `key`, `title`; optional historical model metadata |
+| `v1.md`, `v2.md`, … | Draft versions; the highest numbered version is current |
+| `brief.md` | Optional context for manual tasks; instructions and facts for AI rewriting |
+| `links.json` | Optional checked links, applied only to passages changed in the current round |
+| `page.html` | Generated annotation and comparison page |
+| Exported annotation JSON | Version-bound marks, notes, and optional exact replacements |
+| `task.json`, `task.results.json` | Portable editing task and result template |
+| `rounds/`, `划线记录.md` | Per-round changes and readable annotation history |
 
-Use a unique `key` for each article. The CLI accepts an annotation JSON array, a single
-record, or a directory of JSON records. Each mark has `id`, `v` (version), `p`
-(zero-based block index), `start`, `end` (exclusive), `quote`, and an optional `reason`.
-An explicit `replace` field bypasses model classification for that mark. See the
-[fictional example](examples/demo/marks.json). Only marks for the current version are used.
+The CLI still accepts legacy annotation arrays and exported Artifact records.
+Legacy `markup.py rewrite` now gives a migration message: use `writer.py rewrite` for
+AI-assisted writing, or `prepare` / `apply` for independent editing. Existing Markdown
+versions and comparison records remain usable. The standalone page no longer syncs
+annotations to a Claude Artifact database.
 
-## Data handling and limits
+Markdown support is intentionally small: headings, paragraphs, simple lists,
+one-line quotes, and basic inline formatting. Review complex formatting carefully.
 
-Building a page is local. The generated HTML contains article text, including the
-previous version and feedback when present: sharing the page shares that content.
-The template loads fonts from Google Fonts. Local marks remain in browser storage;
-Artifact mode additionally sends marks and submission metadata to the host database.
-Model-backed rewriting sends the full draft, brief, and relevant annotations to Google.
+## Data and checks
 
-The Markdown parser is intentionally small: headings, paragraphs, simple lists,
-one-line quotes, and basic inline formatting. This is an early tool; review diffs,
-especially for complex formatting or overlapping selections. Automated classification
-is a heuristic, not a human approval step. There is no automatic fact checker.
-The ignore rules help keep article files and secrets out of Git, but review staged
-files before committing. Published article data is limited to the fictional example
-and the two author-approved references; private briefs and working directories are not included.
+Building, annotating, preparing, and applying edits are local. Generated pages and task
+files contain article text and may include previous versions, feedback, and brief
+content; share only what you intend to disclose. The optional writer sends the draft,
+brief, and relevant feedback to the provider you explicitly select. API keys stay in
+the shell environment and are not embedded in the page.
 
-Run the offline checks with `python3 -m unittest discover -s tests -v`.
+Published article data is limited to the fictional demo and
+[two author-selected Chinese references](examples/real/README.md). Working briefs,
+other drafts, and personal voice corpora are not included. Review staged files before
+committing; ignore rules are only a guard against accidental additions.
+
+```sh
+python3 -m unittest discover -s tests -v
+node --test tests/frontend.test.js
+```
 
 ## 中文说明
 
-划掉不满意的句子，保留稿件其余部分。
+**划线批注独立运行，写作默认使用 Gemini。**
 
-`draft-markup` 用于 Markdown 稿件的划线修改：在网页选中文字、写批注，
-由 Gemini 修改相关段落，再左右对比新旧版本。网页界面和内置提示词为中文，
-正文可以使用其他语言。
+- `markup.py` 和网页负责划线、批注、本地保存、导入导出、应用修改及版本对比。
+  不需要 Claude、Gemini 或任何 AI 账号。
+- `writer.py` 是可选的写作入口，负责理解批注和局部改写，默认使用
+  `gemini-2.5-pro`。你也可以明确选择 OpenRouter 和上表中的模型。
 
-仓库还收录了作者授权公开的[两篇真实中文文章及划线记录](examples/real/README.md)：
-《OpenAI 公开了一批数学成果，so did I》（反差方案）和
-《Sharing our AI progress in mathematics》，可对照正文查看实际修改意见。
+### 不使用 AI 的流程
 
-### 使用方式
+运行 `python3 markup.py build 文章目录`，打开生成的 `page.html`。
+选中文字后添加修改意见，也可以明确指定原样替换或删除。网页在本地保存批注；
+点击「下载批注 JSON」下载文件，「导入批注 JSON」可恢复同一文章、同一版本的批注。
 
-需要 Python 3.9+ 和浏览器，不需要安装第三方 Python 库。上面的离线示例可直接运行：
-它复制一份虚构图书馆通知到临时目录，生成网页、执行一条明确的删除批注，再生成对比页，
-全程无需 API 密钥。
+随后运行 `prepare` 生成任务与结果模板。原样替换和删除可以直接应用；需要改写的内容，
+可以自己填写，也可以交给任意助手。完成后用 `apply` 生成下一版，再用 `build` 查看差异。
+上面的离线演示给出了完整命令，无需 API 密钥。
+已有任务文件不会被覆盖，下一轮可用 `--output 文章目录/task-v2.json` 指定新文件。
 
-自然语言批注的分类与段落改写需要在环境变量中设置 `GEMINI_API_KEY`。
-默认模型为 `gemini-2.5-pro`，可通过 `rewrite --model MODEL_ID` 指定账号可用的其他
-Gemini 模型。网络配置使用标准 `HTTPS_PROXY`、`NO_PROXY` 环境变量，模型调用可能产生费用。
+任务绑定文章、版本和原文哈希。版本不符、修改组遗漏或重复、作者原话未保留时，
+工具会报错，不会自动扩大修改范围。普通批注的类型判断属于可选写作端，
+划线工具本身不需要调用模型。
 
-当前在线提交流程依赖支持 `window.claude.use("db")` 的 Claude Artifact 宿主：
-发布生成的 `page.html`，完成划线并提交，取回批注数据后运行 `rewrite`，然后重新生成、
-发布页面。发布和取回数据由人或助手操作，仓库不提供完整托管服务。
-本地打开网页可以划线并保存在浏览器中，但目前没有内置的 JSON 导出按钮。
+### 默认写作与推荐备选
 
-### 批注与版本
+设置环境变量 `GEMINI_API_KEY` 后，用
+`python3 writer.py rewrite 文章目录 批注文件` 调用默认 Gemini 写作。
+默认沿用正式版 2.5 Pro；它与旧的 Pro 03-25 不等同，Google 当前对 2.5 系列有历史使用资格限制。
 
-- 给出替换句或删除指令：模型先判断批注类型，再按分类结果执行。
-- 给出意见或疑问：交给 Gemini 改写，连续的相关段落一起处理。
-- 需要确定执行方式时：在批注 JSON 中设置 `replace`，或用每轮的 overrides 文件指定。
-- 每轮生成新版本、差异记录和 `划线记录.md`；接受前检查分类、事实和作者原话。
+如需 OpenRouter，设置 `OPENROUTER_API_KEY`，明确传入
+`--provider openrouter --model 模型ID`。推荐备选为 Claude Opus 4.6、Claude Sonnet 4.5、
+DeepSeek V3.2、Gemini 3.7 Flash；旧的 Gemini Pro 0325 只保留名称说明，正式版 2.5 Pro
+作为另一个明确选项。3.7 Flash 的 Google API 名称已转路由到 3.8 Flash，不能保证重现旧体验。
+具体 ID 和官方来源见上表。工具不会遇错后自动换模型或切换计费账号。
 
-文章目录包含 `meta.json`、`brief.md`、`v1.md` 等输入，以及自动生成的 `rounds/`、
-后续版本和 `page.html`。字段及命令见上方表格和示例。每篇文章使用不同的 `key`。
+### 资料和隐私
 
-### 隐私与边界
-
-日常工作稿件请放在仓库外。此仓库包含工具代码、虚构示例，以及作者明确选定的两篇真实中文
-正文与划线记录；未包含私人 brief、文风语料库、其他稿件或密钥。
-生成的网页包含当前正文、上一版正文及已有反馈，分享页面会同时分享这些内容。
-网页会加载 Google Fonts；本地划线保存在浏览器中，Artifact 模式还会将划线发送给宿主数据库。
-使用模型改写时，全文、brief 和相关批注会发送给 Google。
-
-这是一个早期的辅助改稿工具，Markdown 支持范围有限，复杂格式和重叠划线需要人工核对。
-批注自动分类不是人工审批，也没有自动事实核查。提交代码前仍应检查暂存文件；
-`.gitignore` 只是防止误提交的辅助措施。离线检查命令：
-`python3 -m unittest discover -s tests -v`。
-
-采用 [MIT 许可证](LICENSE)。
+[真实参考](examples/real/README.md)包含你在仓库中可阅读的两篇中文正文与划线记录，
+与虚构的可运行示例分开。日常稿件、brief 和生成文件应放在仓库外。
+独立批注流程只在本地处理；调用写作端时才把相关材料发送给所选服务。
+原 `markup.py rewrite` 命令已迁移到 `writer.py rewrite`，网页不再同步 Claude Artifact 数据库。
